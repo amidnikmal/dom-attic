@@ -1,6 +1,6 @@
 {
   "name": "dom-attic",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Mount heavy components once, show cheap snapshots, revive on interaction. Framework-agnostic DOM core.",
   "type": "module",
   "license": "MIT",
