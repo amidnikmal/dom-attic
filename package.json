@@ -60,5 +60,13 @@
     "vite": "^7.0.0",
     "vitest": "^3.0.0",
     "vue": "^3.5.13"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/amidnikmal/dom-attic.git"
+  },
+  "homepage": "https://github.com/amidnikmal/dom-attic#readme",
+  "bugs": {
+    "url": "https://github.com/amidnikmal/dom-attic/issues"
   }
 }
