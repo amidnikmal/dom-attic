@@ -61,7 +61,7 @@ export function useAttic(): Attic {
 }
 
 /**
- * Обёртка ячейки: её корневой элемент — тот самый host, содержимое которого
+ * Обёртка ячейки: её корневой элемент и есть тот host, содержимое которого
  * подменяется снимком. Содержимое слота монтируется один раз.
  */
 export const AtticCell = defineComponent({
@@ -90,7 +90,7 @@ export const AtticCell = defineComponent({
       () => props.revision,
       async () => {
         attic.markDirty(props.cellKey)
-        // Живой узел уже пропатчен фреймворком — остаётся переснять снимок.
+        // Живой узел уже пропатчен фреймворком, остаётся переснять снимок.
         await yieldToBrowser()
         attic.refresh(props.cellKey)
       },

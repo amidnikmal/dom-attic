@@ -15,7 +15,7 @@ function copyFieldState(from: ParentNode, to: ParentNode): void {
   })
 }
 
-/** Позиции прокрутки внутри ячейки — тоже свойства, не атрибуты. */
+/** Позиции прокрутки внутри ячейки: тоже свойства, не атрибуты. */
 function copyScroll(from: HTMLElement, to: HTMLElement): void {
   const sources = [from, ...from.querySelectorAll<HTMLElement>('*')]
   const targets = [to, ...to.querySelectorAll<HTMLElement>('*')]

@@ -6,7 +6,7 @@ import { nodeByPath, pathTo, replayOn } from './twin'
 const REVIVE_EVENTS = ['pointerdown', 'focusin'] as const
 
 /**
- * Единственный вход в живой компонент — взаимодействие со снимком.
+ * Единственный вход в живой компонент: взаимодействие со снимком.
  * Слушатели вешаются один раз на корень, а не на каждую ячейку.
  */
 export function attachInteraction(attic: Attic, root: HTMLElement): () => void {
