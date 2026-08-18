@@ -1,0 +1,64 @@
+{
+  "name": "dom-attic",
+  "version": "0.1.0",
+  "description": "Mount heavy components once, show cheap snapshots, revive on interaction. Framework-agnostic DOM core.",
+  "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "virtual-scroll",
+    "table",
+    "performance",
+    "dom",
+    "recycling",
+    "offscreen"
+  ],
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./vue": {
+      "types": "./dist/adapters/vue/index.d.ts",
+      "import": "./dist/vue.js"
+    }
+  },
+  "scripts": {
+    "build": "vite build && tsc -p tsconfig.build.json",
+    "dev": "vite --config vite.playground.config.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "lint": "eslint . --fix",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "vue": "^3.4.0"
+  },
+  "peerDependenciesMeta": {
+    "vue": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "@playwright/test": "^1.49.0",
+    "@types/node": "^26.2.0",
+    "@vitejs/plugin-vue": "^6.0.0",
+    "@vitest/browser": "^3.0.0",
+    "eslint": "^9.39.0",
+    "eslint-plugin-simple-import-sort": "^12.1.1",
+    "playwright": "^1.49.0",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.20.0",
+    "vite": "^7.0.0",
+    "vitest": "^3.0.0",
+    "vue": "^3.5.13"
+  }
+}
