@@ -6,7 +6,7 @@ import { cleanup, createCell } from './helpers'
 afterEach(cleanup)
 
 describe('Attic', () => {
-  it('park оставляет снимок, а живой узел покидает документ', () => {
+  it('park leaves a snapshot and the live node leaves the document', () => {
     const attic = new Attic()
     const { host, live } = createCell()
 
@@ -18,7 +18,7 @@ describe('Attic', () => {
     expect(attic.stats.parked).toBe(1)
   })
 
-  it('revive возвращает тот же самый узел со всем его состоянием', () => {
+  it('revive returns the very same node with all of its state', () => {
     const attic = new Attic()
     const { host, live } = createCell()
 
@@ -34,7 +34,7 @@ describe('Attic', () => {
     expect(live.querySelector('span')!.textContent).toBe('2')
   })
 
-  it('снимок сохраняет состояние на момент park', () => {
+  it('the snapshot captures the state at park time', () => {
     const attic = new Attic()
     const { host, live } = createCell()
 
@@ -45,7 +45,7 @@ describe('Attic', () => {
     expect(host.firstElementChild!.querySelector('span')!.textContent).toBe('1')
   })
 
-  it('вытесняет самую давнюю ячейку сверх лимита', () => {
+  it('evicts the oldest cell beyond the limit', () => {
     const evicted: string[] = []
     const attic = new Attic({ liveLimit: 2, onEvict: (key) => evicted.push(key) })
 
@@ -65,14 +65,14 @@ describe('Attic', () => {
     expect(isSnapshot(cells[0]!.host.firstElementChild)).toBe(true)
   })
 
-  it('refresh пересобирает снимок только после markDirty', () => {
+  it('refresh rebuilds the snapshot only after markDirty', () => {
     const attic = new Attic()
     const { host, live } = createCell()
 
     attic.register('a', host)
     attic.park('a')
 
-    // Живой узел меняется, пока лежит в хранилище: так его патчит фреймворк.
+    // The live node changes while in storage, the way a framework patches it.
     live.querySelector('span')!.textContent = '42'
 
     expect(attic.refresh('a')).toBe(false)
@@ -83,7 +83,7 @@ describe('Attic', () => {
     expect(host.firstElementChild!.querySelector('span')!.textContent).toBe('42')
   })
 
-  it('dispose возвращает живые узлы в документ', () => {
+  it('dispose returns live nodes to the document', () => {
     const attic = new Attic()
     const { host, live } = createCell()
 

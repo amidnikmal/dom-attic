@@ -4,17 +4,17 @@ import type { AtticOptions, AtticStats, CellKey, CellRecord } from './types'
 export const KEY_ATTR = 'data-attic-key'
 
 /**
- * Хранилище живых узлов и реестр ячеек.
+ * Storage for live nodes and a registry of cells.
  *
- * Идея: тяжёлый компонент монтируется один раз и больше никогда не
- * пересоздаётся. Когда он не нужен, его DOM-узел уезжает в detached-контейнер
- * (там нет ни layout, ни paint, но компонент жив и продолжает получать
- * обновления), а на его месте остаётся инертный снимок.
+ * The idea: a heavy component is mounted once and never recreated. When it is
+ * not needed, its DOM node moves into a detached container, where there is no
+ * layout and no paint, yet the component stays alive and keeps receiving
+ * updates. An inert snapshot takes its place in the document.
  */
 export class Attic {
   private readonly storage = document.createElement('div')
   private readonly cells = new Map<CellKey, CellRecord>()
-  /** Порядок вставки = порядок вытеснения. */
+  /** Insertion order is eviction order. */
   private readonly liveKeys = new Set<CellKey>()
   private readonly options: Required<Omit<AtticOptions, 'onEvict'>> & Pick<AtticOptions, 'onEvict'>
 
@@ -33,7 +33,7 @@ export class Attic {
     return this.options.replayEvents
   }
 
-  /** Взять ячейку под управление. Хост уже содержит смонтированный узел. */
+  /** Put a cell under management. The host already holds the mounted node. */
   register(key: CellKey, host: HTMLElement): void {
     host.setAttribute(KEY_ATTR, key)
 
@@ -61,12 +61,12 @@ export class Attic {
     return this.cells.keys()
   }
 
-  /** Ключ ячейки, которой принадлежит элемент. */
+  /** Key of the cell an element belongs to. */
   keyOf(node: Element): CellKey | null {
     return node.closest(`[${KEY_ATTR}]`)?.getAttribute(KEY_ATTR) ?? null
   }
 
-  /** Увести живой узел в хранилище, оставив на его месте свежий снимок. */
+  /** Move the live node to storage, leaving a fresh snapshot behind. */
   park(key: CellKey): boolean {
     const cell = this.cells.get(key)
     if (!cell || cell.state === 'parked') return false
@@ -86,7 +86,7 @@ export class Attic {
     return true
   }
 
-  /** Вернуть живой узел в документ, вытеснив самые давние сверх лимита. */
+  /** Bring the live node back, evicting the oldest ones beyond the limit. */
   revive(key: CellKey): HTMLElement | null {
     const cell = this.cells.get(key)
     if (!cell?.live) return null
@@ -114,15 +114,15 @@ export class Attic {
   }
 
   /**
-   * Данные ячейки изменились. Живой узел фреймворк обновит сам, даже в
-   * хранилище, а вот снимок протух и подлежит пересъёмке.
+   * Cell data changed. The framework updates the live node on its own, even in
+   * storage, but the snapshot is now stale and has to be retaken.
    */
   markDirty(key: CellKey): void {
     const cell = this.cells.get(key)
     if (cell?.state === 'parked') cell.dirty = true
   }
 
-  /** Пересобрать снимок ячейки по текущему состоянию живого узла. */
+  /** Rebuild the cell snapshot from the current state of the live node. */
   refresh(key: CellKey): boolean {
     const cell = this.cells.get(key)
     if (!cell?.live || cell.state !== 'parked' || !cell.dirty) return false
@@ -147,7 +147,7 @@ export class Attic {
     }
   }
 
-  /** Вернуть все узлы в документ: фреймворк должен размонтировать их сам. */
+  /** Return every node to the document for the framework to unmount. */
   dispose(): void {
     this.cells.forEach((cell) => {
       if (cell.state === 'parked' && cell.live) {

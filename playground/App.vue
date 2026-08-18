@@ -4,7 +4,7 @@
       registered: {{ stats.registered }} · live: {{ stats.live }} · parked: {{ stats.parked }}
     </p>
 
-    <button data-testid="bump" @click="bump">данные извне (+1)</button>
+    <button data-testid="bump" @click="bump">external data (+1)</button>
 
     <div ref="rootRef" class="grid">
       <AtticCell

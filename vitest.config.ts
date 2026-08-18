@@ -1,8 +1,8 @@
 import { defineConfig } from 'vitest/config'
 
 /**
- * Тесты гоняются в настоящем браузере: ядро работает с detached DOM,
- * фокусом и синтетическими кликами, эмуляции здесь недостаточно.
+ * Tests run in a real browser: the core works with detached DOM, focus and
+ * synthetic clicks, and emulation is not faithful enough there.
  */
 export default defineConfig({
   test: {

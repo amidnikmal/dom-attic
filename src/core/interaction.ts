@@ -2,12 +2,12 @@ import type { Attic } from './attic'
 import { isSnapshot } from './snapshot'
 import { nodeByPath, pathTo, replayOn } from './twin'
 
-/** События, по которым снимок уступает место живому компоненту. */
+/** Events that make a snapshot step aside for the live component. */
 const REVIVE_EVENTS = ['pointerdown', 'focusin'] as const
 
 /**
- * Единственный вход в живой компонент: взаимодействие со снимком.
- * Слушатели вешаются один раз на корень, а не на каждую ячейку.
+ * The only way into a live component is interacting with its snapshot.
+ * Listeners are attached once to the root, not to every cell.
  */
 export function attachInteraction(attic: Attic, root: HTMLElement): () => void {
   const handler = (event: Event) => {
@@ -21,7 +21,7 @@ export function attachInteraction(attic: Attic, root: HTMLElement): () => void {
     const snapshot = cell.host.firstElementChild as HTMLElement | null
     if (!snapshot || !isSnapshot(snapshot)) return
 
-    // Путь запоминается до подмены: сразу после неё target покидает документ.
+    // The path is recorded before the swap: right after it the target leaves the document.
     const path = pathTo(snapshot, target)
     const live = attic.revive(key)
     if (!live || !attic.replayEvents || !path) return

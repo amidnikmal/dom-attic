@@ -10,7 +10,7 @@ function pointerDown(target: Element): void {
 }
 
 describe('attachInteraction', () => {
-  it('оживляет ячейку и не теряет первое нажатие', () => {
+  it('revives the cell without losing the first press', () => {
     const attic = new Attic()
     const { host, live, clicks } = createCell()
 
@@ -24,7 +24,7 @@ describe('attachInteraction', () => {
     expect(clicks()).toBe(1)
   })
 
-  it('не трогает уже живые ячейки', () => {
+  it('leaves already live cells alone', () => {
     const attic = new Attic()
     const { host, clicks } = createCell()
 
@@ -36,7 +36,7 @@ describe('attachInteraction', () => {
     expect(clicks()).toBe(0)
   })
 
-  it('replayEvents: false оживляет, но не повторяет нажатие', () => {
+  it('replayEvents: false revives but does not repeat the press', () => {
     const attic = new Attic({ replayEvents: false })
     const { host, live, clicks } = createCell()
 
@@ -50,7 +50,7 @@ describe('attachInteraction', () => {
     expect(clicks()).toBe(0)
   })
 
-  it('снятый слушатель больше не оживляет', () => {
+  it('a detached listener no longer revives', () => {
     const attic = new Attic()
     const { host } = createCell()
 

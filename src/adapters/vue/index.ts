@@ -18,15 +18,15 @@ const ATTIC_KEY: InjectionKey<Attic> = Symbol('attic')
 
 export interface UseAtticRoot {
   attic: Attic
-  /** Навесить на контейнер, внутри которого живут ячейки. */
+  /** Attach to the container the cells live in. */
   rootRef: Ref<HTMLElement | undefined>
   stats: Ref<AtticStats>
   refreshStats: () => void
 }
 
 /**
- * Создаёт attic на текущий компонент и раздаёт его вложенным ячейкам.
- * Перехват взаимодействий вешается на rootRef одним слушателем.
+ * Creates an attic for the current component and shares it with nested cells.
+ * Interaction is captured by a single listener on rootRef.
  */
 export function useAtticRoot(options: AtticOptions = {}): UseAtticRoot {
   const attic = new Attic(options)
@@ -61,16 +61,16 @@ export function useAttic(): Attic {
 }
 
 /**
- * Обёртка ячейки: её корневой элемент и есть тот host, содержимое которого
- * подменяется снимком. Содержимое слота монтируется один раз.
+ * Cell wrapper: its root element is the host whose content is swapped for a
+ * snapshot. The slot content is mounted once.
  */
 export const AtticCell = defineComponent({
   name: 'AtticCell',
   props: {
     cellKey: { type: String, required: true },
-    /** Убрать в хранилище сразу после монтирования. */
+    /** Park in storage right after mounting. */
     parkOnMount: { type: Boolean, default: true },
-    /** Любое значение, меняющееся вместе с данными ячейки: снимок пересобирается. */
+    /** Any value that changes with the cell data: the snapshot gets retaken. */
     revision: { type: [String, Number], default: 0 },
   },
   setup(props, { slots }) {
@@ -90,7 +90,7 @@ export const AtticCell = defineComponent({
       () => props.revision,
       async () => {
         attic.markDirty(props.cellKey)
-        // Живой узел уже пропатчен фреймворком, остаётся переснять снимок.
+        // The framework has already patched the live node, so just retake the snapshot.
         await yieldToBrowser()
         attic.refresh(props.cellKey)
       },

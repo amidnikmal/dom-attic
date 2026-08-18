@@ -14,10 +14,10 @@ import { ref } from 'vue'
 
 defineProps<{ modelValue: number }>()
 
-/** Внутреннее состояние: обязано пережить park/revive. */
+/** Internal state: it must survive park/revive. */
 const local = ref(0)
 
-/** Имитация тяжести: столько опций монтировать дорого. */
+/** Simulated weight: mounting this many options is expensive. */
 const options = Array.from({ length: 500 }, (_, idx) => idx)
 </script>
 

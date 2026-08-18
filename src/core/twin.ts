@@ -1,6 +1,6 @@
 /**
- * Путь до узла внутри поддерева: цепочка индексов среди детей.
- * Снимок структурно идентичен живому узлу, поэтому путь переносим между ними.
+ * Path to a node inside a subtree, as a chain of child indices.
+ * A snapshot is structurally identical to the live node, so the path carries over.
  */
 export function pathTo(root: HTMLElement, target: Element): number[] | null {
   const path: number[] = []
@@ -17,7 +17,7 @@ export function pathTo(root: HTMLElement, target: Element): number[] | null {
   return node === root ? path : null
 }
 
-/** Узел-близнец по тому же пути в структурно идентичном поддереве. */
+/** The twin node at the same path in a structurally identical subtree. */
 export function nodeByPath(root: HTMLElement, path: number[]): HTMLElement | null {
   return path.reduce<HTMLElement | null>(
     (node, idx) => (node?.children[idx] as HTMLElement | undefined) ?? null,
@@ -26,9 +26,9 @@ export function nodeByPath(root: HTMLElement, path: number[]): HTMLElement | nul
 }
 
 /**
- * Повторяет действие пользователя на оживлённом узле.
- * Без этого первое нажатие теряется вместе с удалённым снимком:
- * браузер не доводит click до элемента, покинувшего документ.
+ * Repeats the user action on the revived node.
+ * Without it the first press is lost along with the removed snapshot:
+ * the browser never delivers click to an element that left the document.
  */
 export function replayOn(twin: HTMLElement, sourceType: string): void {
   if (sourceType === 'focusin') {

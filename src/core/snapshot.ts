@@ -1,6 +1,6 @@
 export const SNAPSHOT_ATTR = 'data-attic-snapshot'
 
-/** Свойства, которые cloneNode не переносит: они живут не в атрибутах. */
+/** Properties cloneNode leaves behind: they do not live in attributes. */
 function copyFieldState(from: ParentNode, to: ParentNode): void {
   const sources = from.querySelectorAll('input, select, textarea')
   const targets = to.querySelectorAll('input, select, textarea')
@@ -15,7 +15,7 @@ function copyFieldState(from: ParentNode, to: ParentNode): void {
   })
 }
 
-/** Позиции прокрутки внутри ячейки: тоже свойства, не атрибуты. */
+/** Scroll positions inside the cell are properties as well, not attributes. */
 function copyScroll(from: HTMLElement, to: HTMLElement): void {
   const sources = [from, ...from.querySelectorAll<HTMLElement>('*')]
   const targets = [to, ...to.querySelectorAll<HTMLElement>('*')]
@@ -30,8 +30,8 @@ function copyScroll(from: HTMLElement, to: HTMLElement): void {
 }
 
 /**
- * Инертная копия живого узла: выглядит так же, но не имеет ни слушателей,
- * ни привязки к фреймворку. Стоит примерно ничего.
+ * An inert copy of the live node: it looks the same but carries no listeners
+ * and no framework bindings, so it costs next to nothing.
  */
 export function createSnapshot(live: HTMLElement): HTMLElement {
   const clone = live.cloneNode(true) as HTMLElement

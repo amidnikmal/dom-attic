@@ -6,7 +6,7 @@ import { cleanup, createCell } from './helpers'
 afterEach(cleanup)
 
 describe('twin', () => {
-  it('находит тот же узел в структурно идентичной копии', () => {
+  it('finds the same node in a structurally identical copy', () => {
     const { live } = createCell()
     const clone = createSnapshot(live)
     const button = clone.querySelector('button')!
@@ -17,7 +17,7 @@ describe('twin', () => {
     expect(nodeByPath(live, path!)).toBe(live.querySelector('button'))
   })
 
-  it('возвращает null, если узел вне поддерева', () => {
+  it('returns null when the node is outside the subtree', () => {
     const { live } = createCell()
 
     expect(pathTo(live, document.body)).toBeNull()

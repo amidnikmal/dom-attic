@@ -1,14 +1,14 @@
-/** Ключ ячейки: уникален в пределах одного attic. */
+/** Cell key, unique within a single attic. */
 export type CellKey = string
 
 export type CellState = 'live' | 'parked'
 
 export interface AtticOptions {
-  /** Сколько живых узлов одновременно допускается в документе. */
+  /** How many live nodes may sit in the document at once. */
   liveLimit?: number
-  /** Повторять ли исходное событие на оживлённом узле. */
+  /** Whether to replay the original event on the revived node. */
   replayEvents?: boolean
-  /** Вызывается, когда ячейка вытеснена лимитом. */
+  /** Called when a cell is evicted by the limit. */
   onEvict?: (key: CellKey) => void
 }
 
@@ -22,9 +22,9 @@ export interface AtticStats {
 
 export interface CellRecord {
   key: CellKey
-  /** Контейнер, в котором лежит либо живой узел, либо снимок. */
+  /** Container holding either the live node or a snapshot. */
   host: HTMLElement
-  /** Живой узел: в документе, если состояние live, иначе в хранилище. */
+  /** The live node: in the document while state is live, in storage otherwise. */
   live: HTMLElement | null
   state: CellState
   dirty: boolean

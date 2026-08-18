@@ -1,4 +1,4 @@
-/** Ячейка со счётчиком: клик по кнопке инкрементит состояние живого узла. */
+/** A cell with a counter: clicking the button mutates the live node state. */
 export function createCell(): { host: HTMLElement, live: HTMLElement, clicks: () => number } {
   const host = document.createElement('div')
   const live = document.createElement('div')

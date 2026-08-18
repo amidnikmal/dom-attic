@@ -1,4 +1,4 @@
-/** Отдать управление браузеру, чтобы длинная работа не вешала вкладку. */
+/** Hand control back to the browser so long work does not freeze the tab. */
 export function yieldToBrowser(): Promise<void> {
   return new Promise((resolve) => {
     if (typeof requestIdleCallback === 'function') {
@@ -9,7 +9,7 @@ export function yieldToBrowser(): Promise<void> {
   })
 }
 
-/** Пройти по набору порциями, уступая поток между ними. */
+/** Walk a collection in chunks, yielding between them. */
 export async function runChunked<T>(
   items: Iterable<T>,
   action: (item: T) => void,
