@@ -93,6 +93,34 @@ library records the path to the pressed element, swaps the snapshot for the live
 the twin element by that same path and replays the event on it. Without this the first click
 would be swallowed: the browser never delivers `click` to an element that left the document.
 
+## Surviving virtualization
+
+A virtualized list removes rows from the DOM, and a framework destroys whatever it mounted
+inside them, snapshots included. The farm keeps that content mounted out of sight and lends
+a node to whichever placeholder shows it right now:
+
+```vue
+<script setup>
+import { AtticFarm, AtticSlot, useFarm } from 'dom-attic/vue'
+
+useFarm()
+</script>
+
+<template>
+  <!-- Rendered once per key, wherever the rows are or are not -->
+  <AtticFarm :keys="warmKeys" v-slot="{ cellKey }">
+    <HeavySelect :model-value="valueOf(cellKey)" :options="tenThousand" />
+  </AtticFarm>
+
+  <!-- Inside the virtualized row: shows the node, mounts nothing -->
+  <AtticSlot :cell-key="`${row.id}:status`" />
+</template>
+```
+
+Scrolling a row away releases the node back to the farm; scrolling it back adopts the very
+same node, with its state intact. Keep `keys` in a stable order and bounded in size: it is
+the set of cells you are willing to keep alive at once.
+
 ## Limitations
 
 - cell content must be a **single root element**, only the first node is snapshotted;

@@ -1,4 +1,5 @@
 export { Attic, KEY_ATTR } from './attic'
+export { Farm, type FarmKey } from './farm'
 export { attachInteraction } from './interaction'
 export { runChunked, yieldToBrowser } from './scheduler'
 export { createSnapshot, isSnapshot, SNAPSHOT_ATTR } from './snapshot'

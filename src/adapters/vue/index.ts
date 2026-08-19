@@ -12,7 +12,22 @@ import {
   watch,
 } from 'vue'
 
-import { attachInteraction, Attic, type AtticOptions, type AtticStats, yieldToBrowser } from '../../core/index'
+import {
+  attachInteraction,
+  Attic,
+  type AtticOptions,
+  type AtticStats,
+  Farm,
+  yieldToBrowser,
+} from '../../core/index'
+
+/** Ref callbacks may hand over a component instance instead of an element. */
+function asElement(value: unknown): HTMLElement | null {
+  if (value instanceof HTMLElement) return value
+
+  const root = (value as { $el?: unknown } | null)?.$el
+  return root instanceof HTMLElement ? root : null
+}
 
 const ATTIC_KEY: InjectionKey<Attic> = Symbol('attic')
 
@@ -98,5 +113,97 @@ export const AtticCell = defineComponent({
     )
 
     return () => h('div', { ref: hostRef, class: 'attic-cell' }, slots.default?.())
+  },
+})
+
+/* farm: cell content that outlives the row showing it */
+
+const FARM_KEY: InjectionKey<Farm> = Symbol('attic-farm')
+
+/**
+ * Creates a farm and shares it with the placeholders below.
+ *
+ * Content is rendered by AtticFarm once per key and handed to whichever
+ * AtticSlot displays that key at the moment, so scrolling a row out of view
+ * no longer destroys what was inside it.
+ */
+export function useFarm(): Farm {
+  const farm = new Farm()
+
+  provide(FARM_KEY, farm)
+  onBeforeUnmount(() => farm.clear())
+
+  return farm
+}
+
+function injectFarm(): Farm {
+  const farm = inject(FARM_KEY)
+  if (!farm) throw new Error('[dom-attic] AtticFarm and AtticSlot require useFarm()')
+
+  return farm
+}
+
+/**
+ * Renders content for every key it is given, out of sight.
+ * Keys should stay in a stable order: the list is patched like any other,
+ * and reordering it would move nodes that placeholders are currently showing.
+ */
+export const AtticFarm = defineComponent({
+  name: 'AtticFarm',
+  props: {
+    keys: { type: Array as () => string[], required: true },
+  },
+  setup(props, { slots }) {
+    const farm = injectFarm()
+    const containerRef = ref<HTMLElement>()
+
+    onMounted(() => {
+      // The farm's own container is detached, so nothing here costs layout.
+      if (containerRef.value) farm.container.append(containerRef.value)
+    })
+
+    return () =>
+      h(
+        'div',
+        { ref: containerRef, class: 'attic-farm' },
+        props.keys.map((key) =>
+          h(
+            'div',
+            {
+              key,
+              class: 'attic-farm__item',
+              ref: (element: unknown) => farm.register(key, asElement(element)),
+            },
+            slots.default?.({ cellKey: key }),
+          ),
+        ),
+      )
+  },
+})
+
+/** Shows whatever the farm grew for its key, without mounting anything itself. */
+export const AtticSlot = defineComponent({
+  name: 'AtticSlot',
+  props: {
+    cellKey: { type: String, required: true },
+  },
+  setup(props, { slots }) {
+    const farm = injectFarm()
+    const hostRef = ref<HTMLElement>()
+
+    const adopt = () => {
+      if (hostRef.value) farm.adopt(props.cellKey, hostRef.value)
+    }
+
+    onMounted(adopt)
+    watch(() => props.cellKey, (next, previous) => {
+      farm.release(previous)
+      void next
+      adopt()
+    })
+
+    onBeforeUnmount(() => farm.release(props.cellKey))
+
+    return () => h('div', { ref: hostRef, class: 'attic-slot' }, slots.fallback?.())
   },
 })
