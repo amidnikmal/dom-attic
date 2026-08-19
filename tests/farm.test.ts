@@ -70,3 +70,24 @@ describe('Farm', () => {
     expect(host.firstElementChild).toBe(live)
   })
 })
+
+describe('Farm recovery', () => {
+  it('reclaims a node that was pulled away', () => {
+    const farm = new Farm()
+    const { live } = createCell()
+    const host = document.createElement('div')
+    const thief = document.createElement('div')
+    document.body.append(host, thief)
+
+    farm.register('a', live)
+    farm.adopt('a', host)
+
+    // Something else moved the node, as a keyed patch would.
+    thief.append(live)
+    expect(host.firstElementChild).toBeNull()
+
+    // Registering again puts it back where the placeholder expects it.
+    farm.register('a', live)
+    expect(host.firstElementChild).toBe(live)
+  })
+})

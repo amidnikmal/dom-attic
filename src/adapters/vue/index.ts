@@ -1,4 +1,5 @@
 import {
+  computed,
   defineComponent,
   h,
   inject,
@@ -145,8 +146,12 @@ function injectFarm(): Farm {
 
 /**
  * Renders content for every key it is given, out of sight.
- * Keys should stay in a stable order: the list is patched like any other,
- * and reordering it would move nodes that placeholders are currently showing.
+ *
+ * The list is rendered in sorted order rather than the order it arrives in.
+ * A keyed patch moves nodes around when the order changes, and a node that a
+ * placeholder currently shows would be dragged back here mid-patch, blanking
+ * the cell or throwing. Sorting makes the order depend on the keys alone, so
+ * reordering the data leaves the rendered list untouched.
  */
 export const AtticFarm = defineComponent({
   name: 'AtticFarm',
@@ -162,11 +167,13 @@ export const AtticFarm = defineComponent({
       if (containerRef.value) farm.container.append(containerRef.value)
     })
 
+    const ordered = computed(() => [...props.keys].sort())
+
     return () =>
       h(
         'div',
         { ref: containerRef, class: 'attic-farm' },
-        props.keys.map((key) =>
+        ordered.value.map((key) =>
           h(
             'div',
             {
@@ -195,14 +202,28 @@ export const AtticSlot = defineComponent({
       if (hostRef.value) farm.adopt(props.cellKey, hostRef.value)
     }
 
-    onMounted(adopt)
+    onMounted(() => {
+      adopt()
+
+      // A node can still be pulled away by an unrelated patch, so the slot
+      // takes it back as soon as it notices the host went empty.
+      observer = new MutationObserver(() => {
+        if (hostRef.value && !hostRef.value.firstElementChild) adopt()
+      })
+      if (hostRef.value) observer.observe(hostRef.value, { childList: true })
+    })
+
+    let observer: MutationObserver | undefined
     watch(() => props.cellKey, (next, previous) => {
       farm.release(previous)
       void next
       adopt()
     })
 
-    onBeforeUnmount(() => farm.release(props.cellKey))
+    onBeforeUnmount(() => {
+      observer?.disconnect()
+      farm.release(props.cellKey)
+    })
 
     return () => h('div', { ref: hostRef, class: 'attic-slot' }, slots.fallback?.())
   },
