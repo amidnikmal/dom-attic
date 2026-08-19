@@ -157,10 +157,17 @@ export const AtticFarm = defineComponent({
   name: 'AtticFarm',
   props: {
     keys: { type: Array as () => string[], required: true },
+    /**
+     * How many entries to add per idle slice. Mounting a few hundred heavy
+     * cells in one patch freezes the tab, so the farm grows in steps and
+     * yields to the browser in between.
+     */
+    chunk: { type: Number, default: 20 },
   },
   setup(props, { slots }) {
     const farm = injectFarm()
     const containerRef = ref<HTMLElement>()
+    const budget = ref(props.chunk)
 
     onMounted(() => {
       // The farm's own container is detached, so nothing here costs layout.
@@ -169,11 +176,34 @@ export const AtticFarm = defineComponent({
 
     const ordered = computed(() => [...props.keys].sort())
 
+    const rendered = computed(() => ordered.value.slice(0, budget.value))
+
+    let growing = false
+
+    /** Grows the rendered set until it covers every key it was given. */
+    async function grow() {
+      if (growing) return
+      growing = true
+
+      while (budget.value < ordered.value.length) {
+        await yieldToBrowser()
+        budget.value += props.chunk
+      }
+
+      growing = false
+    }
+
+    watch(ordered, () => {
+      // A shrunken set should release its extra entries right away.
+      budget.value = Math.min(budget.value, Math.max(ordered.value.length, props.chunk))
+      void grow()
+    }, { immediate: true })
+
     return () =>
       h(
         'div',
         { ref: containerRef, class: 'attic-farm' },
-        ordered.value.map((key) =>
+        rendered.value.map((key) =>
           h(
             'div',
             {

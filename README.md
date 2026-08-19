@@ -118,8 +118,13 @@ useFarm()
 ```
 
 Scrolling a row away releases the node back to the farm; scrolling it back adopts the very
-same node, with its state intact. Keep `keys` in a stable order and bounded in size: it is
-the set of cells you are willing to keep alive at once.
+same node, with its state intact.
+
+`keys` may arrive in any order: the farm renders them sorted, so reordering the data (a sort,
+a drag) never moves a node a placeholder is currently showing. Keep the set bounded, though:
+it is exactly the set of cells you are willing to keep alive at once. The farm grows in idle
+slices of `chunk` entries (20 by default) so a few hundred heavy cells do not mount in one
+patch and freeze the tab.
 
 ## Limitations
 
