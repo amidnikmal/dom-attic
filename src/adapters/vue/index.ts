@@ -121,6 +121,12 @@ interface FarmContext {
   farm: Farm
   /** Where each key is shown right now; reactive so Teleport follows it. */
   targets: Map<string, HTMLElement>
+  /**
+   * Where each teleport actually points at the moment. Lags behind `targets`
+   * on purpose: moving mounted content costs time, so it is paced. A slot
+   * whose key has not arrived yet shows its placeholder instead.
+   */
+  applied: Ref<Map<string, HTMLElement>>
 }
 
 const FARM_KEY: InjectionKey<FarmContext> = Symbol('attic-farm')
@@ -135,8 +141,9 @@ const FARM_KEY: InjectionKey<FarmContext> = Symbol('attic-farm')
 export function useFarm(): Farm {
   const farm = new Farm()
   const targets = shallowReactive(new Map<string, HTMLElement>())
+  const applied = shallowRef(new Map<string, HTMLElement>())
 
-  provide(FARM_KEY, { farm, targets })
+  provide(FARM_KEY, { farm, targets, applied })
   onBeforeUnmount(() => farm.clear())
 
   return farm
@@ -174,7 +181,7 @@ export const AtticFarm = defineComponent({
     visibleSlice: { type: Number, default: 6 },
   },
   setup(props, { slots }) {
-    const { farm, targets } = injectFarm()
+    const { farm, targets, applied } = injectFarm()
 
     /**
      * Keys whose content is actually mounted. Kept as a set rather than a
@@ -198,7 +205,20 @@ export const AtticFarm = defineComponent({
      * is scrolling the nodes stay put and placeholders cover the wait; one
      * sync moves everything into place once the window settles.
      */
-    const applied = shallowRef(new Map<string, HTMLElement>())
+    /**
+     * Keys that have to leave the host they occupy: the placeholder there now
+     * shows a different row. They go first — a host cleared late would hold
+     * two cells at once, the old one and the new one.
+     */
+    function evicted(): string[] {
+      const result: string[] = []
+
+      applied.value.forEach((host, key) => {
+        if (targets.get(key) !== host) result.push(key)
+      })
+
+      return result
+    }
 
     /** Keys whose content is not where the placeholders now want it. */
     function misplaced(): string[] {
@@ -211,19 +231,28 @@ export const AtticFarm = defineComponent({
       return result
     }
 
-    /** Moves a few teleports to their new hosts, in slices like everything else. */
+    function pendingMoves(): number {
+      return evicted().length + misplaced().length
+    }
+
+    /** Moves a few teleports at a time, vacating hosts before filling them. */
     function moveSome(count: number): boolean {
-      const queue = misplaced()
-      if (!queue.length) return false
+      const leaving = evicted()
+      const arriving = misplaced()
+      if (!leaving.length && !arriving.length) return false
 
       const next = new Map(applied.value)
-      queue.slice(0, count).forEach((key) => {
-        const host = targets.get(key)
-        if (host) {
-          next.set(key, host)
-          delete host.dataset.atticPending
-        }
-      })
+
+      // Vacating is cheap — the node goes back to the hidden container — so a
+      // whole slice of it is done at once, ahead of any arrivals.
+      leaving.forEach((key) => next.delete(key))
+
+      if (!leaving.length) {
+        arriving.slice(0, count).forEach((key) => {
+          const host = targets.get(key)
+          if (host) next.set(key, host)
+        })
+      }
 
       applied.value = next
 
@@ -278,7 +307,7 @@ export const AtticFarm = defineComponent({
         if (!queue.length) {
           if (props.keys.every((key) => grown.has(key))
             && grown.size === wanted.value.size
-            && !misplaced().length) break
+            && !pendingMoves()) break
 
           // Nothing to do right now, but warm-up is still owed: wait it out.
           await yieldToBrowser()
@@ -355,20 +384,23 @@ export const AtticSlot = defineComponent({
     cellKey: { type: String, required: true },
   },
   setup(props, { slots }) {
-    const { farm, targets } = injectFarm()
+    const { farm, targets, applied } = injectFarm()
     const hostRef = ref<HTMLElement>()
 
     /** Claiming a key makes the farm teleport its content here. */
     const claim = () => {
       if (!hostRef.value) return
 
-      // Until the farm moves the right content in, the host may still hold a
-      // node that belongs to another key; the attribute lets CSS hide it and
-      // show the placeholder instead.
-      hostRef.value.dataset.atticPending = ''
       targets.set(props.cellKey, hostRef.value)
       farm.claim(props.cellKey, hostRef.value)
     }
+
+    /**
+     * Until the farm moves the right content in, the host may still hold a node
+     * belonging to another key. The mark is derived rather than set by hand, so
+     * it can never be left behind.
+     */
+    const pending = computed(() => applied.value.get(props.cellKey) !== hostRef.value)
 
     const disclaim = (key: string) => {
       targets.delete(key)
@@ -385,6 +417,15 @@ export const AtticSlot = defineComponent({
 
     onBeforeUnmount(() => disclaim(props.cellKey))
 
-    return () => h('div', { ref: hostRef, class: 'attic-slot' }, slots.fallback?.())
+    return () =>
+      h(
+        'div',
+        {
+          ref: hostRef,
+          class: 'attic-slot',
+          ...(pending.value ? { 'data-attic-pending': '' } : {}),
+        },
+        [slots.fallback ? h('span', { class: 'attic-fallback' }, slots.fallback()) : null],
+      )
   },
 })

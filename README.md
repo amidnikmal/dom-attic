@@ -127,11 +127,20 @@ while heavy content is still mounting:
 </AtticSlot>
 ```
 
-The fallback stays in the host next to the real content, so hide it with CSS once it is no
-longer the only child: `.attic-slot > .fallback:not(:only-child) { display: none }`.
+The fallback is wrapped in `.attic-fallback` and stays in the host next to the real content.
+A host that is still waiting for its content carries `data-attic-pending` — the mark is
+derived from the farm's own state, so it can never be left behind, so two rules cover
+the whole handover:
 
-`keys` may arrive in any order: the farm renders them sorted, so reordering the data (a sort,
-a drag) never moves a node a placeholder is currently showing. Keep the set bounded, though:
+```css
+.attic-slot[data-attic-pending] > :not(.attic-fallback) { display: none }
+.attic-slot:not([data-attic-pending]) > .attic-fallback:not(:only-child) { display: none }
+```
+
+`keys` are served in the order they are given, so listing them the way rows are laid out
+makes content appear top to bottom rather than scattered around. Order does not affect
+correctness: every entry is teleported to its own host, so reordering the data (a sort, a
+drag) never moves a node a placeholder is currently showing. Keep the set bounded, though:
 it is exactly the set of cells you are willing to keep alive at once.
 
 Only a real change of `keys` counts as the window moving: a parent that re-renders often —
