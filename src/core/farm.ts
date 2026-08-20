@@ -14,11 +14,42 @@ export class Farm {
   /** Where a node currently lives, if a placeholder took it. */
   private readonly hosts = new Map<FarmKey, HTMLElement>()
   private readonly home = document.createElement('div')
+  private readonly listeners = new Set<() => void>()
 
   readonly stats = { grown: 0, adopted: 0, released: 0 }
 
   constructor() {
     this.home.style.display = 'none'
+  }
+
+  /** Notified whenever a placeholder appears or goes away. */
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener)
+    return () => this.listeners.delete(listener)
+  }
+
+  private notify(): void {
+    this.listeners.forEach((listener) => listener())
+  }
+
+  /** Where content for a key should currently live. */
+  targetFor(key: FarmKey): HTMLElement {
+    return this.hosts.get(key) ?? this.home
+  }
+
+  /** A placeholder claims a key; content moves there on the next render. */
+  claim(key: FarmKey, host: HTMLElement): void {
+    this.hosts.set(key, host)
+    this.stats.adopted++
+    this.notify()
+  }
+
+  /** The placeholder is gone, so content goes back to the farm. */
+  disclaim(key: FarmKey): void {
+    if (!this.hosts.delete(key)) return
+
+    this.stats.released++
+    this.notify()
   }
 
   /** The element the farm renders its content into. */

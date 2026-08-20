@@ -1,4 +1,5 @@
 import {
+  type Component,
   computed,
   defineComponent,
   h,
@@ -10,6 +11,7 @@ import {
   type Ref,
   ref,
   shallowRef,
+  Teleport,
   watch,
 } from 'vue'
 
@@ -22,13 +24,7 @@ import {
   yieldToBrowser,
 } from '../../core/index'
 
-/** Ref callbacks may hand over a component instance instead of an element. */
-function asElement(value: unknown): HTMLElement | null {
-  if (value instanceof HTMLElement) return value
 
-  const root = (value as { $el?: unknown } | null)?.$el
-  return root instanceof HTMLElement ? root : null
-}
 
 const ATTIC_KEY: InjectionKey<Attic> = Symbol('attic')
 
@@ -166,16 +162,10 @@ export const AtticFarm = defineComponent({
   },
   setup(props, { slots }) {
     const farm = injectFarm()
-    const containerRef = ref<HTMLElement>()
     const budget = ref(props.chunk)
-
-    onMounted(() => {
-      // The farm's own container is detached, so nothing here costs layout.
-      if (containerRef.value) farm.container.append(containerRef.value)
-    })
+    const revision = ref(0)
 
     const ordered = computed(() => [...props.keys].sort())
-
     const rendered = computed(() => ordered.value.slice(0, budget.value))
 
     let growing = false
@@ -194,27 +184,31 @@ export const AtticFarm = defineComponent({
     }
 
     watch(ordered, () => {
-      // A shrunken set should release its extra entries right away.
       budget.value = Math.min(budget.value, Math.max(ordered.value.length, props.chunk))
       void grow()
     }, { immediate: true })
 
+    // A placeholder appearing or leaving changes where content belongs.
+    const unsubscribe = farm.subscribe(() => { revision.value++ })
+    onBeforeUnmount(unsubscribe)
+
+    /**
+     * Each entry is teleported to wherever its key is shown right now, or to
+     * the farm's own hidden container when nothing shows it. Teleport moves
+     * the existing DOM instead of remounting it, and — unlike moving nodes by
+     * hand — Vue keeps track of where they went, so later patches stay valid.
+     */
     return () =>
-      h(
-        'div',
-        { ref: containerRef, class: 'attic-farm' },
-        rendered.value.map((key) =>
-          h(
-            'div',
-            {
-              key,
-              class: 'attic-farm__item',
-              ref: (element: unknown) => farm.register(key, asElement(element)),
-            },
-            slots.default?.({ cellKey: key }),
-          ),
-        ),
-      )
+      rendered.value.map((key) => {
+        void revision.value
+
+        // Teleport's own typing does not fit the generic h() overloads.
+        return h(
+          Teleport as unknown as Component,
+          { to: farm.targetFor(key), key },
+          { default: () => slots.default?.({ cellKey: key }) },
+        )
+      })
   },
 })
 
