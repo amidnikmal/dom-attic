@@ -192,3 +192,45 @@ describe('AtticFarm likeness', () => {
     expect(copy?.textContent).toContain('a')
   })
 })
+
+describe('AtticSlot press', () => {
+  it('serves a touched cell at once and does not lose the press', async () => {
+    const keys = ref(['a', 'b'])
+    const visible = ref(['a'])
+    const host = document.createElement('div')
+    document.body.append(host)
+    let clicks = 0
+
+    const App = defineComponent({
+      setup() {
+        useFarm()
+
+        return () => [
+          ...visible.value.map((key) => h(AtticSlot, { key, cellKey: key }, {
+            fallback: () => h('button', { class: 'stand' }, key),
+          })),
+          h(AtticFarm, { keys: keys.value, chunk: 1, settleDelay: 5_000 }, {
+            default: ({ cellKey }: { cellKey: string }) =>
+              h('button', { class: 'grown', onClick: () => { clicks++ } }, cellKey),
+          }),
+        ]
+      },
+    })
+
+    const app = createApp(App)
+    app.mount(host)
+    stop = () => app.unmount()
+
+    // settleDelay is huge, so nothing would be served on its own.
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(grown()).toEqual([])
+
+    // A press on the inert stand-in must bring the cell in and land on it.
+    const stand = document.querySelector('.stand') as HTMLElement
+    stand.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+
+    await new Promise((resolve) => setTimeout(resolve, 80))
+    expect(grown()).toEqual(['a'])
+    expect(clicks).toBe(1)
+  })
+})

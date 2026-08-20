@@ -24,6 +24,9 @@ import {
   type AtticStats,
   DEFAULT_MAX_SNAPSHOT_NODES,
   Farm,
+  nodeByPath,
+  pathTo,
+  replayOn,
   yieldToBrowser,
 } from '../../core/index'
 
@@ -128,6 +131,13 @@ interface FarmContext {
    * whose key has not arrived yet shows its placeholder instead.
    */
   applied: Ref<Map<string, HTMLElement>>
+  /**
+   * Cells the user has just touched. They jump the queue: waiting a couple of
+   * hundred milliseconds is fine while scrolling, but not after a click.
+   */
+  urgent: Set<string>
+  /** Bumped whenever the urgent set changes, so the farm can react to it. */
+  urgentRevision: Ref<number>
 }
 
 const FARM_KEY: InjectionKey<FarmContext> = Symbol('attic-farm')
@@ -143,8 +153,10 @@ export function useFarm(): Farm {
   const farm = new Farm()
   const targets = shallowReactive(new Map<string, HTMLElement>())
   const applied = shallowRef(new Map<string, HTMLElement>())
+  const urgent = new Set<string>()
+  const urgentRevision = ref(0)
 
-  provide(FARM_KEY, { farm, targets, applied })
+  provide(FARM_KEY, { farm, targets, applied, urgent, urgentRevision })
   onBeforeUnmount(() => farm.clear())
 
   return farm
@@ -184,7 +196,7 @@ export const AtticFarm = defineComponent({
     maxSnapshotNodes: { type: Number, default: DEFAULT_MAX_SNAPSHOT_NODES },
   },
   setup(props, { slots }) {
-    const { farm, targets, applied } = injectFarm()
+    const { farm, targets, applied, urgent, urgentRevision } = injectFarm()
 
     /**
      * Keys whose content is actually mounted. Kept as a set rather than a
@@ -306,6 +318,29 @@ export const AtticFarm = defineComponent({
 
     const moving = () => performance.now() - lastChange < props.settleDelay
 
+    /** Serves a touched cell at once, ahead of the paced queue. */
+    function serveUrgent(): boolean {
+      const keys = [...urgent].filter((key) => wanted.value.has(key))
+      if (!keys.length) return false
+
+      keys.forEach((key) => {
+        grown.add(key)
+
+        const host = targets.get(key)
+        if (host) {
+          const next = new Map(applied.value)
+          next.set(key, host)
+          applied.value = next
+        }
+
+        urgent.delete(key)
+      })
+
+      return true
+    }
+
+    watch(urgentRevision, () => void grow())
+
     /** Cells someone is showing come first; the rest is only warm-up. */
     function pending(): string[] {
       // Nothing is mounted while the window is still moving. Heavy content
@@ -324,6 +359,12 @@ export const AtticFarm = defineComponent({
       growing = true
 
       while (true) {
+        // A touched cell is served before anything else, moving window or not.
+        if (serveUrgent()) {
+          await nextTick()
+          continue
+        }
+
         // Moving a mounted node across the DOM costs about as much as building
         // it, so retargeting is paced the same way and waits for quiet.
         if (!moving() && moveSome(Math.max(slice, props.visibleSlice))) {
@@ -436,7 +477,7 @@ export const AtticSlot = defineComponent({
     cellKey: { type: String, required: true },
   },
   setup(props, { slots }) {
-    const { farm, targets, applied } = injectFarm()
+    const { farm, targets, applied, urgent, urgentRevision } = injectFarm()
     const hostRef = ref<HTMLElement>()
 
     /** Claiming a key makes the farm teleport its content here. */
@@ -473,6 +514,40 @@ export const AtticSlot = defineComponent({
     watch([pending, () => props.cellKey], () => nextTick(showLikeness), { flush: 'post' })
     onMounted(showLikeness)
 
+    /**
+     * A copy or a placeholder is inert, so a press on it would go nowhere.
+     * The cell is pulled in front of the queue and the press is repeated on
+     * the matching element of the real content — otherwise the first click on
+     * a cell is always lost.
+     */
+    function onPress(event: PointerEvent | FocusEvent): void {
+      const host = hostRef.value
+      if (!host || !pending.value) return
+
+      const stand = host.querySelector<HTMLElement>(
+        ':scope > [data-attic-snapshot], :scope > .attic-fallback',
+      )
+      const path = stand ? pathTo(stand, event.target as Element) : null
+
+      urgent.add(props.cellKey)
+      urgentRevision.value++
+
+      const stop = watch(pending, (waiting) => {
+        if (waiting) return
+        stop()
+
+        const live = [...host.children].find(
+          (child) => !child.classList.contains('attic-fallback')
+            && !child.hasAttribute('data-attic-snapshot'),
+        )
+
+        if (!(live instanceof HTMLElement)) return
+
+        const twin = path ? nodeByPath(live, path) : null
+        replayOn(twin ?? live, event.type)
+      }, { flush: 'post' })
+    }
+
     const disclaim = (key: string) => {
       targets.delete(key)
       farm.disclaim(key)
@@ -497,6 +572,8 @@ export const AtticSlot = defineComponent({
         {
           ref: hostRef,
           class: 'attic-slot',
+          onPointerdownCapture: onPress,
+          onFocusinCapture: onPress,
           ...(pending.value ? { 'data-attic-pending': '' } : {}),
         },
         [slots.fallback ? h('span', { class: 'attic-fallback' }, slots.fallback()) : null],

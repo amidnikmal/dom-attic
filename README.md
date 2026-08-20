@@ -117,6 +117,10 @@ useFarm()
 </template>
 ```
 
+A press on a cell that is still showing a copy or a placeholder is not lost: the cell jumps
+the queue, and the press is repeated on the matching element of the real content once it
+arrives.
+
 Scrolling a row away releases the node back to the farm; scrolling it back adopts the very
 same node, with its state intact. Give `AtticSlot` a `fallback` slot to show something cheap
 while heavy content is still mounting:
