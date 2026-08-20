@@ -134,6 +134,10 @@ longer the only child: `.attic-slot > .fallback:not(:only-child) { display: none
 a drag) never moves a node a placeholder is currently showing. Keep the set bounded, though:
 it is exactly the set of cells you are willing to keep alive at once.
 
+Only a real change of `keys` counts as the window moving: a parent that re-renders often —
+an inline function in a prop is enough — hands over a fresh array with the same contents, and
+treating that as movement would postpone mounting indefinitely.
+
 Growth is paced rather than immediate. Nothing is mounted while the window is still moving —
 heavy content costs more than a frame, so building it mid-scroll stutters, and the `fallback`
 slot covers the wait. Once scrolling settles, cells on screen are filled first, several per

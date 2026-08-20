@@ -258,7 +258,20 @@ export const AtticFarm = defineComponent({
       growing = false
     }
 
-    watch(() => props.keys, () => {
+    /**
+     * Only a real change of the key set counts as movement. A parent that
+     * re-renders hands over a fresh array with the same contents — treating
+     * that as a moving window would postpone mounting forever.
+     */
+    let previous: string[] = []
+
+    watch(() => props.keys, (keys) => {
+      const changed = keys.length !== previous.length
+        || keys.some((key, index) => key !== previous[index])
+
+      if (!changed) return
+
+      previous = [...keys]
       lastChange = performance.now()
       void grow()
     }, { immediate: true, deep: true })

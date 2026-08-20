@@ -39,7 +39,8 @@ function mountFarm(initialKeys: string[], shown: string[]) {
 }
 
 const grown = () => [...document.querySelectorAll('.attic-slot > .grown')].map((el) => el.textContent)
-const tick = () => new Promise((resolve) => setTimeout(resolve, 60))
+/** Longer than settleDelay: the farm waits for the window to settle. */
+const tick = () => new Promise((resolve) => setTimeout(resolve, 260))
 
 describe('AtticFarm', () => {
   it('fills the placeholders it is given', async () => {
@@ -73,20 +74,25 @@ describe('AtticFarm growth', () => {
     visible.value = []
 
     // Right after the change only a slice may have been added, not all 40.
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    await new Promise((resolve) => setTimeout(resolve, 200))
     const rightAfter = document.querySelectorAll('.grown').length
     expect(rightAfter).toBeLessThan(40)
   })
 
-  it('fills a cell that comes into view even while the window moves', async () => {
+  it('fills a cell that came into view first, once the window settles', async () => {
     const { keys, visible } = mountFarm(Array.from({ length: 40 }, (_, i) => `a${i}`), [])
     await tick()
 
     keys.value = Array.from({ length: 40 }, (_, i) => `b${i}`)
     visible.value = ['b7']
-    await tick()
 
-    expect(grown().includes('b7')).toBe(true)
+    // Nothing is built while the window is still moving.
+    await new Promise((resolve) => setTimeout(resolve, 40))
+    expect(grown()).toEqual([])
+
+    // Once it settles, the cell on screen is the first one served.
+    await tick()
+    expect(grown()).toEqual(['b7'])
   })
 
   it('forgets content that left the window', async () => {
@@ -101,5 +107,42 @@ describe('AtticFarm growth', () => {
     const texts = [...document.querySelectorAll('.grown')].map((el) => el.textContent)
     expect(texts).not.toContain('a')
     expect(texts).not.toContain('b')
+  })
+})
+
+describe('AtticFarm resilience', () => {
+  it('keeps mounting when the parent re-renders with an equal key array', async () => {
+    const keys = ref(['a', 'b', 'c'])
+    const visible = ref(['a'])
+    const host = document.createElement('div')
+    document.body.append(host)
+
+    const App = defineComponent({
+      setup() {
+        useFarm()
+        const tick = ref(0)
+
+        // A parent that re-renders often and hands over a fresh array each
+        // time, which is what an inline prop function causes.
+        const timer = setInterval(() => { tick.value++ }, 4)
+        setTimeout(() => clearInterval(timer), 600)
+
+        return () => [
+          h('i', null, String(tick.value)),
+          ...visible.value.map((key) => h(AtticSlot, { key, cellKey: key })),
+          h(AtticFarm, { keys: [...keys.value], chunk: 2 }, {
+            default: ({ cellKey }: { cellKey: string }) => h('b', { class: 'grown' }, cellKey),
+          }),
+        ]
+      },
+    })
+
+    const app = createApp(App)
+    app.mount(host)
+    stop = () => app.unmount()
+
+    await new Promise((resolve) => setTimeout(resolve, 700))
+
+    expect(grown()).toEqual(['a'])
   })
 })
