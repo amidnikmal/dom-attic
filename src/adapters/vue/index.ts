@@ -192,6 +192,40 @@ export const AtticFarm = defineComponent({
     let growing = false
     let slice = 1
 
+    /**
+     * Where each teleport currently points. Kept apart from the live claims:
+     * moving a heavy node across the DOM costs real time, so while the window
+     * is scrolling the nodes stay put and placeholders cover the wait; one
+     * sync moves everything into place once the window settles.
+     */
+    const applied = shallowRef(new Map<string, HTMLElement>())
+    let lastActivity = 0
+    let syncTimer = 0
+
+    function syncTargets() {
+      applied.value = new Map(targets)
+      // A host with fresh content no longer needs its placeholder.
+      applied.value.forEach((host) => { delete host.dataset.atticPending })
+    }
+
+    function scheduleSync() {
+      lastActivity = performance.now()
+      clearTimeout(syncTimer)
+      syncTimer = window.setTimeout(syncTargets, props.settleDelay)
+    }
+
+    const unsubscribe = farm.subscribe(() => {
+      // A claim while everything is quiet is served in the same task, so the
+      // placeholder set below is removed before the frame is painted.
+      if (performance.now() - lastActivity >= props.settleDelay) syncTargets()
+      else scheduleSync()
+    })
+
+    onBeforeUnmount(() => {
+      unsubscribe()
+      clearTimeout(syncTimer)
+    })
+
     const moving = () => performance.now() - lastChange < props.settleDelay
 
     /** Cells someone is showing come first; the rest is only warm-up. */
@@ -273,6 +307,7 @@ export const AtticFarm = defineComponent({
 
       previous = [...keys]
       lastChange = performance.now()
+      scheduleSync()
       void grow()
     }, { immediate: true, deep: true })
 
@@ -290,7 +325,7 @@ export const AtticFarm = defineComponent({
         // Teleport's own typing does not fit the generic h() overloads.
         h(
           Teleport as unknown as Component,
-          { to: targets.get(key) ?? farm.container, key },
+          { to: applied.value.get(key) ?? farm.container, key },
           { default: () => slots.default?.({ cellKey: key }) },
         ),
       )
@@ -311,6 +346,10 @@ export const AtticSlot = defineComponent({
     const claim = () => {
       if (!hostRef.value) return
 
+      // Until the farm moves the right content in, the host may still hold a
+      // node that belongs to another key; the attribute lets CSS hide it and
+      // show the placeholder instead.
+      hostRef.value.dataset.atticPending = ''
       targets.set(props.cellKey, hostRef.value)
       farm.claim(props.cellKey, hostRef.value)
     }

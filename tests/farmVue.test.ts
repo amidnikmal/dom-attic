@@ -146,3 +146,25 @@ describe('AtticFarm resilience', () => {
     expect(grown()).toEqual(['a'])
   })
 })
+
+describe('AtticFarm retargeting', () => {
+  it('marks a host as pending until the content actually moves in', async () => {
+    const { keys, visible } = mountFarm(['a', 'b', 'c'], ['a'])
+    await tick()
+    expect(grown()).toEqual(['a'])
+
+    // The window moves: the slot claims a new key straight away, but the
+    // content must not be dragged across the DOM mid-scroll.
+    keys.value = ['b', 'c', 'd']
+    visible.value = ['c']
+    await new Promise((resolve) => setTimeout(resolve, 30))
+
+    const host = document.querySelector('.attic-slot') as HTMLElement
+    expect(host.dataset.atticPending).toBe('')
+
+    // Once it settles, the right content is in place and the mark is gone.
+    await tick()
+    expect(host.dataset.atticPending).toBeUndefined()
+    expect(host.textContent).toBe('c')
+  })
+})
