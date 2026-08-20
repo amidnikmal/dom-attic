@@ -199,32 +199,39 @@ export const AtticFarm = defineComponent({
      * sync moves everything into place once the window settles.
      */
     const applied = shallowRef(new Map<string, HTMLElement>())
-    let lastActivity = 0
-    let syncTimer = 0
 
-    function syncTargets() {
-      applied.value = new Map(targets)
-      // A host with fresh content no longer needs its placeholder.
-      applied.value.forEach((host) => { delete host.dataset.atticPending })
+    /** Keys whose content is not where the placeholders now want it. */
+    function misplaced(): string[] {
+      const result: string[] = []
+
+      targets.forEach((host, key) => {
+        if (applied.value.get(key) !== host) result.push(key)
+      })
+
+      return result
     }
 
-    function scheduleSync() {
-      lastActivity = performance.now()
-      clearTimeout(syncTimer)
-      syncTimer = window.setTimeout(syncTargets, props.settleDelay)
+    /** Moves a few teleports to their new hosts, in slices like everything else. */
+    function moveSome(count: number): boolean {
+      const queue = misplaced()
+      if (!queue.length) return false
+
+      const next = new Map(applied.value)
+      queue.slice(0, count).forEach((key) => {
+        const host = targets.get(key)
+        if (host) {
+          next.set(key, host)
+          delete host.dataset.atticPending
+        }
+      })
+
+      applied.value = next
+
+      return true
     }
 
-    const unsubscribe = farm.subscribe(() => {
-      // A claim while everything is quiet is served in the same task, so the
-      // placeholder set below is removed before the frame is painted.
-      if (performance.now() - lastActivity >= props.settleDelay) syncTargets()
-      else scheduleSync()
-    })
-
-    onBeforeUnmount(() => {
-      unsubscribe()
-      clearTimeout(syncTimer)
-    })
+    const unsubscribe = farm.subscribe(() => void grow())
+    onBeforeUnmount(unsubscribe)
 
     const moving = () => performance.now() - lastChange < props.settleDelay
 
@@ -246,6 +253,14 @@ export const AtticFarm = defineComponent({
       growing = true
 
       while (true) {
+        // Moving a mounted node across the DOM costs about as much as building
+        // it, so retargeting is paced the same way and waits for quiet.
+        if (!moving() && moveSome(Math.max(slice, props.visibleSlice))) {
+          await nextTick()
+          await yieldToBrowser()
+          continue
+        }
+
         // Dropping content is as expensive as building it, so stale entries
         // are released in slices too, and never while the window is moving.
         if (!moving()) {
@@ -261,7 +276,9 @@ export const AtticFarm = defineComponent({
 
         const queue = pending()
         if (!queue.length) {
-          if (props.keys.every((key) => grown.has(key)) && grown.size === wanted.value.size) break
+          if (props.keys.every((key) => grown.has(key))
+            && grown.size === wanted.value.size
+            && !misplaced().length) break
 
           // Nothing to do right now, but warm-up is still owed: wait it out.
           await yieldToBrowser()
@@ -307,7 +324,6 @@ export const AtticFarm = defineComponent({
 
       previous = [...keys]
       lastChange = performance.now()
-      scheduleSync()
       void grow()
     }, { immediate: true, deep: true })
 

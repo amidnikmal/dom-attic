@@ -40,7 +40,9 @@ function mountFarm(initialKeys: string[], shown: string[]) {
 
 const grown = () => [...document.querySelectorAll('.attic-slot > .grown')].map((el) => el.textContent)
 /** Longer than settleDelay: the farm waits for the window to settle. */
-const tick = () => new Promise((resolve) => setTimeout(resolve, 260))
+/** Longer than settleDelay plus a couple of slices: the farm waits for the
+    window to settle, then moves and mounts in paced steps. */
+const tick = () => new Promise((resolve) => setTimeout(resolve, 500))
 
 describe('AtticFarm', () => {
   it('fills the placeholders it is given', async () => {
