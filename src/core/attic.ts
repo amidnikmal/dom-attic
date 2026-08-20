@@ -74,7 +74,10 @@ export class Attic {
     const live = (cell.live ?? cell.host.firstElementChild) as HTMLElement | null
     if (!live || isSnapshot(live)) return false
 
-    cell.host.replaceChild(createSnapshot(live), live)
+    const copy = createSnapshot(live)
+    if (!copy) return false
+
+    cell.host.replaceChild(copy, live)
     this.storage.appendChild(live)
 
     cell.live = live
@@ -127,7 +130,10 @@ export class Attic {
     const cell = this.cells.get(key)
     if (!cell?.live || cell.state !== 'parked' || !cell.dirty) return false
 
-    cell.host.replaceChild(createSnapshot(cell.live), cell.host.firstElementChild!)
+    const copy = createSnapshot(cell.live)
+    if (!copy) return false
+
+    cell.host.replaceChild(copy, cell.host.firstElementChild!)
     cell.dirty = false
 
     return true

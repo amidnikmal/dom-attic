@@ -22,6 +22,7 @@ import {
   Attic,
   type AtticOptions,
   type AtticStats,
+  DEFAULT_MAX_SNAPSHOT_NODES,
   Farm,
   yieldToBrowser,
 } from '../../core/index'
@@ -179,6 +180,8 @@ export const AtticFarm = defineComponent({
     settleDelay: { type: Number, default: 150 },
     /** Minimum slice for cells that are on screen once scrolling has stopped. */
     visibleSlice: { type: Number, default: 6 },
+    /** Cells larger than this are never copied: the copy would cost as much. */
+    maxSnapshotNodes: { type: Number, default: DEFAULT_MAX_SNAPSHOT_NODES },
   },
   setup(props, { slots }) {
     const { farm, targets, applied } = injectFarm()
@@ -240,7 +243,9 @@ export const AtticFarm = defineComponent({
       const result: string[] = []
 
       applied.value.forEach((host, key) => {
-        if (targets.get(key) === host && !farm.hasSnapshot(key)) result.push(key)
+        if (targets.get(key) === host && !farm.hasSnapshot(key) && !farm.isUncopyable(key)) {
+          result.push(key)
+        }
       })
 
       return result
@@ -262,7 +267,11 @@ export const AtticFarm = defineComponent({
           (child) => !child.classList.contains('attic-fallback') && !child.hasAttribute('data-attic-snapshot'),
         )
 
-        if (content instanceof HTMLElement) farm.capture(key, content)
+        // A cell too large to copy is remembered as such, so the farm does not
+        // keep trying and paying for it on every pass.
+        if (content instanceof HTMLElement && !farm.capture(key, content, props.maxSnapshotNodes)) {
+          farm.markUncopyable(key)
+        }
       })
 
       return true
@@ -340,7 +349,10 @@ export const AtticFarm = defineComponent({
         if (!queue.length) {
           // Photographing is the least urgent job, so it runs once nothing is
           // waiting to be mounted or moved.
-          if (!moving() && captureSome(props.visibleSlice)) {
+          // One at a time: cloning a heavy cell is cheaper than building it,
+          // but still more than a frame can afford.
+          if (!moving() && captureSome(1)) {
+            await nextTick()
             await yieldToBrowser()
             continue
           }

@@ -127,11 +127,15 @@ while heavy content is still mounting:
 </AtticSlot>
 ```
 
-A cell that has been shown at least once is photographed in idle time, and its frozen copy
+A cell that has been shown at least once is photographed in idle time, one cell per slice, and its frozen copy
 stands in for it the moment it comes back into view — cloning a mounted node is an order of
 magnitude cheaper than building it, so the cell is never blank on return. The copy carries
 `data-attic-snapshot`; for a cell shown for the first time there is nothing to copy yet, and
 the `fallback` slot covers that case.
+
+Copying stops being worth it somewhere: a cell larger than `maxSnapshotNodes` (400 nodes by
+default) is never copied, because cloning it would cost about as much as building it. Such
+cells rely on `fallback` alone.
 
 The fallback is wrapped in `.attic-fallback` and stays in the host next to the real content.
 A host that is still waiting for its content carries `data-attic-pending` — the mark is

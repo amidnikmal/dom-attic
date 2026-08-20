@@ -30,10 +30,26 @@ function copyScroll(from: HTMLElement, to: HTMLElement): void {
 }
 
 /**
+ * Copying stops being worth it somewhere: a select with thousands of options
+ * costs as much to clone as to keep, and the whole point of a copy is that it
+ * is cheap. Cells above this size simply do not get one.
+ */
+export const DEFAULT_MAX_SNAPSHOT_NODES = 400
+
+export function countNodes(node: HTMLElement): number {
+  return 1 + node.querySelectorAll('*').length
+}
+
+/**
  * An inert copy of the live node: it looks the same but carries no listeners
  * and no framework bindings, so it costs next to nothing.
  */
-export function createSnapshot(live: HTMLElement): HTMLElement {
+export function createSnapshot(
+  live: HTMLElement,
+  maxNodes: number = DEFAULT_MAX_SNAPSHOT_NODES,
+): HTMLElement | null {
+  if (countNodes(live) > maxNodes) return null
+
   const clone = live.cloneNode(true) as HTMLElement
 
   copyFieldState(live, clone)

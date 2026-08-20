@@ -8,7 +8,7 @@ afterEach(cleanup)
 describe('twin', () => {
   it('finds the same node in a structurally identical copy', () => {
     const { live } = createCell()
-    const clone = createSnapshot(live)
+    const clone = createSnapshot(live)!
     const button = clone.querySelector('button')!
 
     const path = pathTo(clone, button)

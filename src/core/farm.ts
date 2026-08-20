@@ -125,9 +125,28 @@ export class Farm {
     this.stats.released++
   }
 
-  /** Takes a likeness of whatever currently sits in the host for this key. */
-  capture(key: FarmKey, node: HTMLElement): void {
-    this.snapshots.set(key, createSnapshot(node))
+  /**
+   * Takes a likeness of whatever currently sits in the host for this key.
+   * Returns false when the cell is too large to be worth copying.
+   */
+  capture(key: FarmKey, node: HTMLElement, maxNodes?: number): boolean {
+    const copy = createSnapshot(node, maxNodes)
+    if (!copy) return false
+
+    this.snapshots.set(key, copy)
+
+    return true
+  }
+
+  /** Keys that were looked at and found too large to copy. */
+  private readonly uncopyable = new Set<FarmKey>()
+
+  markUncopyable(key: FarmKey): void {
+    this.uncopyable.add(key)
+  }
+
+  isUncopyable(key: FarmKey): boolean {
+    return this.uncopyable.has(key)
   }
 
   hasSnapshot(key: FarmKey): boolean {
