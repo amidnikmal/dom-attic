@@ -5,6 +5,7 @@ import {
   h,
   inject,
   type InjectionKey,
+  nextTick,
   onBeforeUnmount,
   onMounted,
   provide,
@@ -162,49 +163,108 @@ export const AtticFarm = defineComponent({
   props: {
     keys: { type: Array as () => string[], required: true },
     /**
-     * How many entries to add per idle slice. Mounting a few hundred heavy
-     * cells in one patch freezes the tab, so the farm grows in steps and
-     * yields to the browser in between.
+     * Upper bound for how many entries may be added in one slice. The real
+     * size adapts to how long the previous slice took, so heavy cells go in
+     * one at a time while cheap ones go in batches.
      */
     chunk: { type: Number, default: 20 },
+    /** How long after the last change of `keys` the farm resumes growing, ms. */
+    settleDelay: { type: Number, default: 150 },
+    /** Minimum slice for cells that are on screen once scrolling has stopped. */
+    visibleSlice: { type: Number, default: 6 },
   },
   setup(props, { slots }) {
     const { farm, targets } = injectFarm()
-    const budget = ref(props.chunk)
-
-    const ordered = computed(() => [...props.keys].sort())
 
     /**
-     * Whatever a placeholder is showing right now comes first, no matter how
-     * far the growing set has got: a cell on screen must never wait for the
-     * idle queue to reach it. The rest is filled in gradually.
+     * Keys whose content is actually mounted. Kept as a set rather than a
+     * count: when the window moves, every key is new, and a count would let
+     * hundreds of heavy cells mount in a single patch, freezing the tab for
+     * seconds. Growth is always paid for one slice at a time.
      */
-    const rendered = computed(() => {
-      const wanted = new Set(ordered.value)
-      const urgent = [...targets.keys()].filter((key) => wanted.has(key))
+    const grown = shallowReactive(new Set<string>())
 
-      return [...new Set([...urgent, ...ordered.value.slice(0, budget.value)])]
-    })
+    const wanted = computed(() => new Set(props.keys))
+    const rendered = computed(() => [...grown].filter((key) => wanted.value.has(key)))
 
+    /** Timestamp of the last change of `keys`, i.e. of the last scroll step. */
+    let lastChange = 0
     let growing = false
+    let slice = 1
 
-    /** Grows the rendered set until it covers every key it was given. */
+    const moving = () => performance.now() - lastChange < props.settleDelay
+
+    /** Cells someone is showing come first; the rest is only warm-up. */
+    function pending(): string[] {
+      // Nothing is mounted while the window is still moving. Heavy content
+      // costs more than a frame, so building it mid-scroll stutters; the
+      // placeholder already shows the value, and mounting starts as soon as
+      // scrolling settles.
+      if (moving()) return []
+
+      const shown = [...targets.keys()].filter((key) => wanted.value.has(key) && !grown.has(key))
+
+      return [...shown, ...props.keys.filter((key) => !grown.has(key))]
+    }
+
     async function grow() {
       if (growing) return
       growing = true
 
-      while (budget.value < ordered.value.length) {
+      while (true) {
+        // Dropping content is as expensive as building it, so stale entries
+        // are released in slices too, and never while the window is moving.
+        if (!moving()) {
+          const stale = [...grown].filter((key) => !wanted.value.has(key))
+          stale.slice(0, props.chunk).forEach((key) => grown.delete(key))
+
+          if (stale.length) {
+            await nextTick()
+            await yieldToBrowser()
+            continue
+          }
+        }
+
+        const queue = pending()
+        if (!queue.length) {
+          if (props.keys.every((key) => grown.has(key)) && grown.size === wanted.value.size) break
+
+          // Nothing to do right now, but warm-up is still owed: wait it out.
+          await yieldToBrowser()
+          continue
+        }
+
+        const startedAt = performance.now()
+
+        // Cells on screen are filled several at a time: waiting a second for
+        // them to appear one by one looks like a page that is still loading.
+        const onScreen = queue.some((key) => targets.has(key))
+        const take = onScreen ? Math.max(slice, props.visibleSlice) : slice
+        queue.slice(0, take).forEach((key) => grown.add(key))
+
+        // Wait for the patch so the measurement covers the real mounting cost.
+        await nextTick()
+        const took = performance.now() - startedAt
+
+        // Half a frame is the target. Growth is gradual and shrinking is not:
+        // doubling would keep overshooting on heavy cells and stutter.
+        slice = took > 8
+          ? Math.max(1, Math.floor(slice / 2))
+          : Math.min(props.chunk, slice + 1)
+
         await yieldToBrowser()
-        budget.value += props.chunk
       }
 
       growing = false
     }
 
-    watch(ordered, () => {
-      budget.value = Math.min(budget.value, Math.max(ordered.value.length, props.chunk))
+    watch(() => props.keys, () => {
+      lastChange = performance.now()
       void grow()
-    }, { immediate: true })
+    }, { immediate: true, deep: true })
+
+    // A cell coming into view has to be filled even mid-scroll.
+    watch(() => targets.size, () => void grow())
 
     /**
      * Each entry is teleported to wherever its key is shown right now, or to

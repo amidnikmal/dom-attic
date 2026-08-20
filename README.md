@@ -132,9 +132,19 @@ longer the only child: `.attic-slot > .fallback:not(:only-child) { display: none
 
 `keys` may arrive in any order: the farm renders them sorted, so reordering the data (a sort,
 a drag) never moves a node a placeholder is currently showing. Keep the set bounded, though:
-it is exactly the set of cells you are willing to keep alive at once. The farm grows in idle
-slices of `chunk` entries (20 by default) so a few hundred heavy cells do not mount in one
-patch and freeze the tab.
+it is exactly the set of cells you are willing to keep alive at once.
+
+Growth is paced rather than immediate. Nothing is mounted while the window is still moving —
+heavy content costs more than a frame, so building it mid-scroll stutters, and the `fallback`
+slot covers the wait. Once scrolling settles, cells on screen are filled first, several per
+slice (`visibleSlice`), and the surroundings follow one slice at a time. Slice size adapts to
+how long the previous one took, and content leaving the window is released the same way.
+
+| Prop | |
+|---|---|
+| `chunk` | upper bound for entries added per slice (20) |
+| `visibleSlice` | minimum slice for cells on screen (6) |
+| `settleDelay` | quiet time before growth resumes, ms (150) |
 
 ## Limitations
 

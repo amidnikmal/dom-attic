@@ -34,7 +34,9 @@ describe('Farm', () => {
     farm.release('a')
 
     expect(host.firstElementChild).toBeNull()
-    expect(live.isConnected).toBe(false)
+    // The container lives in the document but is hidden, so the node is still
+    // connected: what matters is that it went back to the farm.
+    expect(live.parentElement).toBe(farm.container)
     expect(farm.has('a')).toBe(true)
   })
 
