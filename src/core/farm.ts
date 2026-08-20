@@ -20,6 +20,12 @@ export class Farm {
 
   constructor() {
     this.home.style.display = 'none'
+    this.home.setAttribute('data-attic-home', '')
+
+    // The container has to be in the document: content teleported into a
+    // detached node is never mounted, so cells would stay empty until they
+    // are shown. Hidden costs nothing — display:none skips layout and paint.
+    document.body.append(this.home)
   }
 
   /** Notified whenever a placeholder appears or goes away. */
@@ -30,6 +36,15 @@ export class Farm {
 
   private notify(): void {
     this.listeners.forEach((listener) => listener())
+  }
+
+  /** Keys a placeholder is showing right now. */
+  claimedKeys(): FarmKey[] {
+    return [...this.hosts.keys()]
+  }
+
+  isClaimed(key: FarmKey): boolean {
+    return this.hosts.has(key)
   }
 
   /** Where content for a key should currently live. */
@@ -104,6 +119,7 @@ export class Farm {
   clear(): void {
     this.nodes.clear()
     this.hosts.clear()
-    this.home.replaceChildren()
+    this.listeners.clear()
+    this.home.remove()
   }
 }

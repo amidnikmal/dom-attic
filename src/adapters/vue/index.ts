@@ -10,6 +10,7 @@ import {
   provide,
   type Ref,
   ref,
+  shallowReactive,
   shallowRef,
   Teleport,
   watch,
@@ -115,7 +116,13 @@ export const AtticCell = defineComponent({
 
 /* farm: cell content that outlives the row showing it */
 
-const FARM_KEY: InjectionKey<Farm> = Symbol('attic-farm')
+interface FarmContext {
+  farm: Farm
+  /** Where each key is shown right now; reactive so Teleport follows it. */
+  targets: Map<string, HTMLElement>
+}
+
+const FARM_KEY: InjectionKey<FarmContext> = Symbol('attic-farm')
 
 /**
  * Creates a farm and shares it with the placeholders below.
@@ -126,18 +133,19 @@ const FARM_KEY: InjectionKey<Farm> = Symbol('attic-farm')
  */
 export function useFarm(): Farm {
   const farm = new Farm()
+  const targets = shallowReactive(new Map<string, HTMLElement>())
 
-  provide(FARM_KEY, farm)
+  provide(FARM_KEY, { farm, targets })
   onBeforeUnmount(() => farm.clear())
 
   return farm
 }
 
-function injectFarm(): Farm {
-  const farm = inject(FARM_KEY)
-  if (!farm) throw new Error('[dom-attic] AtticFarm and AtticSlot require useFarm()')
+function injectFarm(): FarmContext {
+  const context = inject(FARM_KEY)
+  if (!context) throw new Error('[dom-attic] AtticFarm and AtticSlot require useFarm()')
 
-  return farm
+  return context
 }
 
 /**
@@ -161,12 +169,22 @@ export const AtticFarm = defineComponent({
     chunk: { type: Number, default: 20 },
   },
   setup(props, { slots }) {
-    const farm = injectFarm()
+    const { farm, targets } = injectFarm()
     const budget = ref(props.chunk)
-    const revision = ref(0)
 
     const ordered = computed(() => [...props.keys].sort())
-    const rendered = computed(() => ordered.value.slice(0, budget.value))
+
+    /**
+     * Whatever a placeholder is showing right now comes first, no matter how
+     * far the growing set has got: a cell on screen must never wait for the
+     * idle queue to reach it. The rest is filled in gradually.
+     */
+    const rendered = computed(() => {
+      const wanted = new Set(ordered.value)
+      const urgent = [...targets.keys()].filter((key) => wanted.has(key))
+
+      return [...new Set([...urgent, ...ordered.value.slice(0, budget.value)])]
+    })
 
     let growing = false
 
@@ -188,10 +206,6 @@ export const AtticFarm = defineComponent({
       void grow()
     }, { immediate: true })
 
-    // A placeholder appearing or leaving changes where content belongs.
-    const unsubscribe = farm.subscribe(() => { revision.value++ })
-    onBeforeUnmount(unsubscribe)
-
     /**
      * Each entry is teleported to wherever its key is shown right now, or to
      * the farm's own hidden container when nothing shows it. Teleport moves
@@ -199,16 +213,14 @@ export const AtticFarm = defineComponent({
      * hand — Vue keeps track of where they went, so later patches stay valid.
      */
     return () =>
-      rendered.value.map((key) => {
-        void revision.value
-
+      rendered.value.map((key) =>
         // Teleport's own typing does not fit the generic h() overloads.
-        return h(
+        h(
           Teleport as unknown as Component,
-          { to: farm.targetFor(key), key },
+          { to: targets.get(key) ?? farm.container, key },
           { default: () => slots.default?.({ cellKey: key }) },
-        )
-      })
+        ),
+      )
   },
 })
 
@@ -219,35 +231,31 @@ export const AtticSlot = defineComponent({
     cellKey: { type: String, required: true },
   },
   setup(props, { slots }) {
-    const farm = injectFarm()
+    const { farm, targets } = injectFarm()
     const hostRef = ref<HTMLElement>()
 
-    const adopt = () => {
-      if (hostRef.value) farm.adopt(props.cellKey, hostRef.value)
+    /** Claiming a key makes the farm teleport its content here. */
+    const claim = () => {
+      if (!hostRef.value) return
+
+      targets.set(props.cellKey, hostRef.value)
+      farm.claim(props.cellKey, hostRef.value)
     }
 
-    onMounted(() => {
-      adopt()
+    const disclaim = (key: string) => {
+      targets.delete(key)
+      farm.disclaim(key)
+    }
 
-      // A node can still be pulled away by an unrelated patch, so the slot
-      // takes it back as soon as it notices the host went empty.
-      observer = new MutationObserver(() => {
-        if (hostRef.value && !hostRef.value.firstElementChild) adopt()
-      })
-      if (hostRef.value) observer.observe(hostRef.value, { childList: true })
-    })
+    onMounted(claim)
 
-    let observer: MutationObserver | undefined
     watch(() => props.cellKey, (next, previous) => {
-      farm.release(previous)
+      disclaim(previous)
       void next
-      adopt()
+      claim()
     })
 
-    onBeforeUnmount(() => {
-      observer?.disconnect()
-      farm.release(props.cellKey)
-    })
+    onBeforeUnmount(() => disclaim(props.cellKey))
 
     return () => h('div', { ref: hostRef, class: 'attic-slot' }, slots.fallback?.())
   },

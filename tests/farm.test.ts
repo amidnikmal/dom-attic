@@ -91,3 +91,36 @@ describe('Farm recovery', () => {
     expect(host.firstElementChild).toBe(live)
   })
 })
+
+describe('Farm claims', () => {
+  it('knows which keys a placeholder is showing', () => {
+    const farm = new Farm()
+    const host = document.createElement('div')
+    document.body.append(host)
+
+    expect(farm.isClaimed('a')).toBe(false)
+
+    farm.claim('a', host)
+    expect(farm.isClaimed('a')).toBe(true)
+    expect(farm.claimedKeys()).toEqual(['a'])
+    expect(farm.targetFor('a')).toBe(host)
+
+    farm.disclaim('a')
+    expect(farm.isClaimed('a')).toBe(false)
+    expect(farm.targetFor('a')).not.toBe(host)
+  })
+
+  it('notifies when claims change, so content can follow', () => {
+    const farm = new Farm()
+    const host = document.createElement('div')
+    let calls = 0
+
+    const stop = farm.subscribe(() => { calls++ })
+    farm.claim('a', host)
+    farm.disclaim('a')
+    stop()
+    farm.claim('b', host)
+
+    expect(calls).toBe(2)
+  })
+})
