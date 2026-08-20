@@ -118,7 +118,17 @@ useFarm()
 ```
 
 Scrolling a row away releases the node back to the farm; scrolling it back adopts the very
-same node, with its state intact.
+same node, with its state intact. Give `AtticSlot` a `fallback` slot to show something cheap
+while heavy content is still mounting:
+
+```vue
+<AtticSlot :cell-key="key">
+  <template #fallback>{{ row.status }}</template>
+</AtticSlot>
+```
+
+The fallback stays in the host next to the real content, so hide it with CSS once it is no
+longer the only child: `.attic-slot > .fallback:not(:only-child) { display: none }`.
 
 `keys` may arrive in any order: the farm renders them sorted, so reordering the data (a sort,
 a drag) never moves a node a placeholder is currently showing. Keep the set bounded, though:
