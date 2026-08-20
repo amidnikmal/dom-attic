@@ -1,3 +1,5 @@
+import { createSnapshot } from './snapshot'
+
 export type FarmKey = string
 
 /**
@@ -15,6 +17,13 @@ export class Farm {
   private readonly hosts = new Map<FarmKey, HTMLElement>()
   private readonly home = document.createElement('div')
   private readonly listeners = new Set<() => void>()
+  /**
+   * Frozen copies of cells that have been shown at least once. Cloning a
+   * mounted node is an order of magnitude cheaper than building it again, so a
+   * cell that comes back into view can show its own likeness immediately while
+   * the live one is on its way.
+   */
+  private readonly snapshots = new Map<FarmKey, HTMLElement>()
 
   readonly stats = { grown: 0, adopted: 0, released: 0 }
 
@@ -116,10 +125,30 @@ export class Farm {
     this.stats.released++
   }
 
+  /** Takes a likeness of whatever currently sits in the host for this key. */
+  capture(key: FarmKey, node: HTMLElement): void {
+    this.snapshots.set(key, createSnapshot(node))
+  }
+
+  hasSnapshot(key: FarmKey): boolean {
+    return this.snapshots.has(key)
+  }
+
+  snapshotFor(key: FarmKey): HTMLElement | undefined {
+    return this.snapshots.get(key)
+  }
+
+  forgetSnapshot(key: FarmKey): void {
+    this.snapshots.get(key)?.remove()
+    this.snapshots.delete(key)
+  }
+
   clear(): void {
     this.nodes.clear()
     this.hosts.clear()
     this.listeners.clear()
+    this.snapshots.forEach((node) => node.remove())
+    this.snapshots.clear()
     this.home.remove()
   }
 }

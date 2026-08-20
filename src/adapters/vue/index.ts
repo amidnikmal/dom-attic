@@ -235,6 +235,39 @@ export const AtticFarm = defineComponent({
       return evicted().length + misplaced().length
     }
 
+    /** Cells shown right now that have never been photographed. */
+    function unphotographed(): string[] {
+      const result: string[] = []
+
+      applied.value.forEach((host, key) => {
+        if (targets.get(key) === host && !farm.hasSnapshot(key)) result.push(key)
+      })
+
+      return result
+    }
+
+    /**
+     * Photographs a few settled cells. The copy is what a cell shows while its
+     * live content is elsewhere, so it has to be taken from content that is
+     * already in place — and only when nothing else is competing for the
+     * main thread.
+     */
+    function captureSome(count: number): boolean {
+      const queue = unphotographed()
+      if (!queue.length) return false
+
+      queue.slice(0, count).forEach((key) => {
+        const host = targets.get(key)
+        const content = host && [...host.children].find(
+          (child) => !child.classList.contains('attic-fallback') && !child.hasAttribute('data-attic-snapshot'),
+        )
+
+        if (content instanceof HTMLElement) farm.capture(key, content)
+      })
+
+      return true
+    }
+
     /** Moves a few teleports at a time, vacating hosts before filling them. */
     function moveSome(count: number): boolean {
       const leaving = evicted()
@@ -305,6 +338,13 @@ export const AtticFarm = defineComponent({
 
         const queue = pending()
         if (!queue.length) {
+          // Photographing is the least urgent job, so it runs once nothing is
+          // waiting to be mounted or moved.
+          if (!moving() && captureSome(props.visibleSlice)) {
+            await yieldToBrowser()
+            continue
+          }
+
           if (props.keys.every((key) => grown.has(key))
             && grown.size === wanted.value.size
             && !pendingMoves()) break
@@ -402,6 +442,25 @@ export const AtticSlot = defineComponent({
      */
     const pending = computed(() => applied.value.get(props.cellKey) !== hostRef.value)
 
+    /**
+     * While the live content is elsewhere, the cell shows its own frozen copy.
+     * Inserting a ready node costs microseconds, so this happens in the same
+     * frame the placeholder would otherwise be empty in.
+     */
+    function showLikeness(): void {
+      const host = hostRef.value
+      if (!host) return
+
+      const shown = host.querySelector<HTMLElement>(':scope > [data-attic-snapshot]')
+      const likeness = pending.value ? farm.snapshotFor(props.cellKey) : undefined
+
+      if (shown && shown !== likeness) shown.remove()
+      if (likeness && likeness.parentElement !== host) host.append(likeness)
+    }
+
+    watch([pending, () => props.cellKey], () => nextTick(showLikeness), { flush: 'post' })
+    onMounted(showLikeness)
+
     const disclaim = (key: string) => {
       targets.delete(key)
       farm.disclaim(key)
@@ -415,7 +474,10 @@ export const AtticSlot = defineComponent({
       claim()
     })
 
-    onBeforeUnmount(() => disclaim(props.cellKey))
+    onBeforeUnmount(() => {
+      hostRef.value?.querySelector(':scope > [data-attic-snapshot]')?.remove()
+      disclaim(props.cellKey)
+    })
 
     return () =>
       h(

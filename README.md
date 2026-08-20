@@ -127,13 +127,23 @@ while heavy content is still mounting:
 </AtticSlot>
 ```
 
+A cell that has been shown at least once is photographed in idle time, and its frozen copy
+stands in for it the moment it comes back into view — cloning a mounted node is an order of
+magnitude cheaper than building it, so the cell is never blank on return. The copy carries
+`data-attic-snapshot`; for a cell shown for the first time there is nothing to copy yet, and
+the `fallback` slot covers that case.
+
 The fallback is wrapped in `.attic-fallback` and stays in the host next to the real content.
 A host that is still waiting for its content carries `data-attic-pending` — the mark is
 derived from the farm's own state, so it can never be left behind, so two rules cover
 the whole handover:
 
 ```css
-.attic-slot[data-attic-pending] > :not(.attic-fallback) { display: none }
+/* waiting: show the frozen copy, or the fallback when there is none yet */
+.attic-slot[data-attic-pending] > :not(.attic-fallback):not([data-attic-snapshot]) { display: none }
+.attic-slot[data-attic-pending]:has([data-attic-snapshot]) > .attic-fallback { display: none }
+
+/* settled: the live content is here, everything else steps aside */
 .attic-slot:not([data-attic-pending]) > .attic-fallback:not(:only-child) { display: none }
 ```
 

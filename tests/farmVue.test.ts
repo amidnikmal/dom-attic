@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { createApp, defineComponent, h, ref } from 'vue'
+import { createApp, defineComponent, h, nextTick, ref } from 'vue'
 
 import { AtticFarm, AtticSlot, useFarm } from '../src/adapters/vue/index'
 
@@ -168,5 +168,27 @@ describe('AtticFarm retargeting', () => {
     await tick()
     expect(host.dataset.atticPending).toBeUndefined()
     expect(host.textContent).toBe('c')
+  })
+})
+
+describe('AtticFarm likeness', () => {
+  it('shows a frozen copy the moment a cell it has seen comes back', async () => {
+    const { visible } = mountFarm(['a', 'b'], ['a'])
+    await tick()
+    await tick()
+    expect((document.querySelector('.attic-slot') as HTMLElement).textContent).toContain('a')
+
+    // The cell scrolls out of view...
+    visible.value = []
+    await tick()
+
+    // ...and back in. Its live content is still on the way, so the copy taken
+    // earlier stands in for it right away, with no empty frame.
+    visible.value = ['a']
+    await nextTick()
+
+    const copy = document.querySelector('.attic-slot > [data-attic-snapshot]')
+    expect(copy).not.toBeNull()
+    expect(copy?.textContent).toContain('a')
   })
 })
