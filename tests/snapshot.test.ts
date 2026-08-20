@@ -52,3 +52,44 @@ describe('snapshot size cap', () => {
     expect(createSnapshot(live, 10)).toBeNull()
   })
 })
+
+describe('lightweight copies', () => {
+  it('keeps what is on screen and skips what is not', () => {
+    const live = document.createElement('div')
+    const visible = document.createElement('b')
+    visible.textContent = 'видно'
+    const hidden = document.createElement('i')
+    hidden.style.display = 'none'
+    for (let i = 0; i < 200; i++) hidden.append(document.createElement('span'))
+
+    live.append(visible, hidden)
+    document.body.append(live)
+
+    // The hidden branch is where the weight is, and none of it is copied.
+    const copy = createSnapshot(live, 10)!
+
+    expect(copy).not.toBeNull()
+    expect(copy.textContent).toBe('видно')
+    expect(copy.querySelector('i')).toBeNull()
+  })
+
+  it('keeps an invisible node that decides what the parent shows', () => {
+    const live = document.createElement('select')
+    for (let i = 0; i < 500; i++) {
+      const option = document.createElement('option')
+      option.value = String(i)
+      option.textContent = `вариант ${i}`
+      live.append(option)
+    }
+    live.value = '7'
+    document.body.append(live)
+
+    // A closed list draws none of its entries, but the chosen one is what the
+    // control displays, so the copy keeps it — three nodes instead of 500.
+    const copy = createSnapshot(live, 10)!
+
+    expect(copy).not.toBeNull()
+    expect(copy.querySelectorAll('option')).toHaveLength(1)
+    expect(copy.textContent).toBe('вариант 7')
+  })
+})

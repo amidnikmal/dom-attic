@@ -137,9 +137,14 @@ magnitude cheaper than building it, so the cell is never blank on return. The co
 `data-attic-snapshot`; for a cell shown for the first time there is nothing to copy yet, and
 the `fallback` slot covers that case.
 
-Copying stops being worth it somewhere: a cell larger than `maxSnapshotNodes` (400 nodes by
-default) is never copied, because cloning it would cost about as much as building it. Such
-cells rely on `fallback` alone.
+A copy keeps what is on screen and walks past what is not, which is where the weight of a
+heavy component usually sits: a list of thousands of entries showing one of them, a
+virtualized panel holding a window of rows. Nodes that draw nothing yet decide what their
+parent shows — a chosen entry, a ticked box, an opened section — are kept regardless. A
+closed list of 2000 entries therefore copies as three nodes, pixel for pixel.
+
+`maxSnapshotNodes` (400 by default) caps the copy itself, not the original. Hitting the cap
+means the copy would be a torn version of the cell, so none is made and `fallback` covers it.
 
 The fallback is wrapped in `.attic-fallback` and stays in the host next to the real content.
 A host that is still waiting for its content carries `data-attic-pending` — the mark is
