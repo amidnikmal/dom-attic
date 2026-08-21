@@ -275,22 +275,10 @@ export const AtticFarm = defineComponent({
       for (const key of unphotographed()) {
         if (taken === count) break
 
-        const host = targets.get(key)
-        const content = host && [...host.children].find(
-          (child) => !child.classList.contains('attic-fallback')
-            && !child.hasAttribute('data-attic-snapshot'),
-        )
-
-        // Nothing to photograph yet: the cell is claimed but its content has
-        // not been mounted. Reporting work here would spin the loop forever
-        // and starve the mounting it is waiting for.
-        if (!(content instanceof HTMLElement)) continue
-
-        // A cell too large to copy is remembered as such, so the farm does not
-        // keep trying and paying for it on every pass.
-        if (!farm.capture(key, content, props.maxSnapshotNodes)) farm.markUncopyable(key)
-
-        taken++
+        // The farm knows where the content is and whether it is worth copying;
+        // a refusal means there is nothing to photograph yet, and reporting
+        // work here would spin the loop and starve the mounting it waits for.
+        if (farm.capture(key, props.maxSnapshotNodes)) taken++
       }
 
       return taken > 0

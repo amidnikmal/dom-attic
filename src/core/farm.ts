@@ -1,6 +1,35 @@
-import { createSnapshot } from './snapshot'
+import { createSnapshot, SNAPSHOT_ATTR } from './snapshot'
 
 export type FarmKey = string
+
+/** Class the placeholder wrapper carries, so it is never mistaken for content. */
+export const FALLBACK_CLASS = 'attic-fallback'
+
+/** What the farm knows about one cell. */
+export interface FarmCellState {
+  /** A placeholder is showing this key right now. */
+  claimed: boolean
+  /** Content for the key exists somewhere — in a host or in the farm. */
+  grown: boolean
+  /** The content is in the host that claims it, rather than on its way. */
+  settled: boolean
+  hasSnapshot: boolean
+  /** The cell was looked at and found too large to copy. */
+  uncopyable: boolean
+}
+
+export interface FarmStats {
+  /** Counters since the farm was created. */
+  grown: number
+  adopted: number
+  released: number
+  captured: number
+  tooLarge: number
+  /** Sizes right now. */
+  content: number
+  claimed: number
+  snapshots: number
+}
 
 /**
  * A holding area for cell content that must outlive the row showing it.
@@ -25,7 +54,42 @@ export class Farm {
    */
   private readonly snapshots = new Map<FarmKey, HTMLElement>()
 
-  readonly stats = { grown: 0, adopted: 0, released: 0, captured: 0, tooLarge: 0 }
+  private readonly counters = { grown: 0, adopted: 0, released: 0, captured: 0, tooLarge: 0 }
+
+  /** Counters and current sizes: the first thing worth looking at when the
+      farm behaves oddly. */
+  get stats(): FarmStats {
+    return {
+      ...this.counters,
+      content: this.nodes.size,
+      claimed: this.hosts.size,
+      snapshots: this.snapshots.size,
+    }
+  }
+
+  /** Everything the farm knows about one cell, in one call. */
+  inspect(key: FarmKey): FarmCellState {
+    const host = this.hosts.get(key)
+
+    return {
+      claimed: Boolean(host),
+      grown: this.nodes.has(key),
+      settled: Boolean(host && this.contentIn(host)),
+      hasSnapshot: this.snapshots.has(key),
+      uncopyable: this.uncopyable.has(key),
+    }
+  }
+
+  /**
+   * The cell's own content inside a host — neither the placeholder nor a
+   * frozen copy, both of which live in the same host.
+   */
+  private contentIn(host: HTMLElement): HTMLElement | undefined {
+    return [...host.children].find(
+      (child) => !child.classList.contains(FALLBACK_CLASS)
+        && !child.hasAttribute(SNAPSHOT_ATTR),
+    ) as HTMLElement | undefined
+  }
 
   constructor() {
     this.home.style.display = 'none'
@@ -64,7 +128,7 @@ export class Farm {
   /** A placeholder claims a key; content moves there on the next render. */
   claim(key: FarmKey, host: HTMLElement): void {
     this.hosts.set(key, host)
-    this.stats.adopted++
+    this.counters.adopted++
     this.notify()
   }
 
@@ -72,7 +136,7 @@ export class Farm {
   disclaim(key: FarmKey): void {
     if (!this.hosts.delete(key)) return
 
-    this.stats.released++
+    this.counters.released++
     this.notify()
   }
 
@@ -90,7 +154,7 @@ export class Farm {
     }
 
     this.nodes.set(key, element)
-    this.stats.grown++
+    this.counters.grown++
 
     // A placeholder may already be waiting for this key.
     const host = this.hosts.get(key)
@@ -109,7 +173,7 @@ export class Farm {
     if (!node) return false
 
     host.append(node)
-    this.stats.adopted++
+    this.counters.adopted++
 
     return true
   }
@@ -122,23 +186,31 @@ export class Farm {
     if (!node) return
 
     this.home.append(node)
-    this.stats.released++
+    this.counters.released++
   }
 
   /**
-   * Takes a likeness of whatever currently sits in the host for this key.
-   * Returns false when the cell is too large to be worth copying.
+   * Takes a likeness of the cell as it looks right now.
+   *
+   * Returns false when there is nothing to copy yet — the cell is claimed but
+   * its content has not arrived — or when the cell is too large to be worth
+   * copying, in which case it is remembered as such and not tried again.
    */
-  capture(key: FarmKey, node: HTMLElement, maxNodes?: number): boolean {
-    const copy = createSnapshot(node, maxNodes)
+  capture(key: FarmKey, maxNodes?: number): boolean {
+    const host = this.hosts.get(key)
+    const content = host && this.contentIn(host)
+    if (!content) return false
+
+    const copy = createSnapshot(content, maxNodes)
     if (!copy) {
-      this.stats.tooLarge++
+      this.counters.tooLarge++
+      this.uncopyable.add(key)
 
       return false
     }
 
     this.snapshots.set(key, copy)
-    this.stats.captured++
+    this.counters.captured++
 
     return true
   }

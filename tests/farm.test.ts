@@ -126,3 +126,87 @@ describe('Farm claims', () => {
     expect(calls).toBe(2)
   })
 })
+
+describe('Farm reporting', () => {
+  it('takes a copy on request and tells the cell apart from its trimmings', () => {
+    const farm = new Farm()
+    const { live } = createCell()
+    const host = document.createElement('div')
+    const placeholder = document.createElement('span')
+    placeholder.className = 'attic-fallback'
+    host.append(placeholder)
+    document.body.append(host)
+
+    farm.register('a', live)
+    farm.claim('a', host)
+    farm.adopt('a', host)
+
+    expect(farm.capture('a')).toBe(true)
+    // the placeholder is not the cell, so it is not what got copied
+    expect(farm.snapshotFor('a')?.className).not.toContain('attic-fallback')
+  })
+
+  it('refuses to copy a cell whose content has not arrived', () => {
+    const farm = new Farm()
+    const host = document.createElement('div')
+    document.body.append(host)
+
+    farm.claim('a', host)
+
+    expect(farm.capture('a')).toBe(false)
+    expect(farm.hasSnapshot('a')).toBe(false)
+  })
+
+  it('remembers a cell that is too large to copy', () => {
+    const farm = new Farm()
+    const live = document.createElement('div')
+    for (let i = 0; i < 50; i++) live.append(document.createElement('span'))
+    const host = document.createElement('div')
+    document.body.append(host)
+
+    farm.register('a', live)
+    farm.claim('a', host)
+    farm.adopt('a', host)
+
+    expect(farm.capture('a', 5)).toBe(false)
+    expect(farm.isUncopyable('a')).toBe(true)
+    expect(farm.stats.tooLarge).toBe(1)
+  })
+
+  it('describes the state of a single cell', () => {
+    const farm = new Farm()
+    const { live } = createCell()
+    const host = document.createElement('div')
+    document.body.append(host)
+
+    expect(farm.inspect('a')).toEqual({
+      claimed: false, grown: false, settled: false, hasSnapshot: false, uncopyable: false,
+    })
+
+    farm.register('a', live)
+    farm.claim('a', host)
+    farm.adopt('a', host)
+    farm.capture('a')
+
+    expect(farm.inspect('a')).toEqual({
+      claimed: true, grown: true, settled: true, hasSnapshot: true, uncopyable: false,
+    })
+
+    farm.release('a')
+    expect(farm.inspect('a').settled).toBe(false)
+  })
+
+  it('reports sizes alongside counters', () => {
+    const farm = new Farm()
+    const { live } = createCell()
+    const host = document.createElement('div')
+    document.body.append(host)
+
+    farm.register('a', live)
+    farm.claim('a', host)
+    farm.adopt('a', host)
+    farm.capture('a')
+
+    expect(farm.stats).toMatchObject({ content: 1, claimed: 1, snapshots: 1, captured: 1 })
+  })
+})

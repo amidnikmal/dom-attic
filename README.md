@@ -194,6 +194,24 @@ how long the previous one took, and content leaving the window is released the s
 | `visibleSlice` | minimum slice for cells on screen (6) |
 | `settleDelay` | quiet time before growth resumes, ms (150) |
 
+## Looking inside
+
+The farm answers two questions without any guesswork on the caller's side:
+
+```ts
+farm.inspect(key)
+// { claimed, grown, settled, hasSnapshot, uncopyable }
+
+farm.stats
+// counters since start: grown, adopted, released, captured, tooLarge
+// sizes right now:      content, claimed, snapshots
+```
+
+`farm.capture(key, maxNodes?)` takes a copy of a cell on demand — the farm finds the content
+itself and tells the placeholder and any existing copy apart from it. It returns false when
+there is nothing to copy yet, and remembers a cell that turned out too large so it is not
+tried again.
+
 ## Limitations
 
 - cell content must be a **single root element**, only the first node is snapshotted;

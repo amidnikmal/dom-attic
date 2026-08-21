@@ -1,5 +1,11 @@
 export { Attic, KEY_ATTR } from './attic'
-export { Farm, type FarmKey } from './farm'
+export {
+  FALLBACK_CLASS,
+  Farm,
+  type FarmCellState,
+  type FarmKey,
+  type FarmStats,
+} from './farm'
 export { attachInteraction } from './interaction'
 export { runChunked, yieldToBrowser } from './scheduler'
 export {
