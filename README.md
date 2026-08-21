@@ -210,6 +210,13 @@ The farm never warms these up; a press builds the cell and lands on it, and from
 is kept like any other, copies and all. A `fallback` is required here — until the first press
 there is nothing else to show.
 
+Such a key does not have to appear in the farm's `keys` at all, and usually should not: a list
+of cells to warm up is exactly what an on-demand cell is not part of. The farm serves any key
+a placeholder is showing, listed or not, and drops it once nothing shows it any more. Leaving
+these keys in `keys` still works for the cells that have a placeholder on screen, but a host
+that warms up rows beyond the visible window would be asking the farm to build the very cells
+it wanted built on demand.
+
 ## Looking inside
 
 The farm answers two questions without any guesswork on the caller's side:

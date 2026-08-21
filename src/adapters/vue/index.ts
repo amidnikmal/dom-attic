@@ -213,7 +213,17 @@ export const AtticFarm = defineComponent({
     const grown = shallowReactive(new Set<string>())
 
     const wanted = computed(() => new Set(props.keys))
-    const rendered = computed(() => [...grown].filter((key) => wanted.value.has(key)))
+
+    /**
+     * A key is worth keeping while it is either being warmed up or shown by a
+     * placeholder. The second half is what makes cells built on demand work:
+     * nobody asks for them in advance, so `keys` never mentions them — but once
+     * someone touches one, it has to be served, and kept for as long as it is
+     * on screen.
+     */
+    const needed = (key: string) => wanted.value.has(key) || targets.has(key)
+
+    const rendered = computed(() => [...grown].filter(needed))
 
     /** Timestamp of the last change of `keys`, i.e. of the last scroll step. */
     let lastChange = 0
@@ -330,7 +340,7 @@ export const AtticFarm = defineComponent({
       // A key that left the window will never be served, so it is dropped
       // rather than kept forever.
       urgent.forEach((key) => {
-        if (!wanted.value.has(key)) urgent.delete(key)
+        if (!needed(key)) urgent.delete(key)
       })
 
       const keys = [...urgent]
@@ -373,6 +383,11 @@ export const AtticFarm = defineComponent({
       if (growing) return
       growing = true
 
+      // Placeholders announce themselves as the patch settles, so a pass that
+      // starts in the same tick would not yet know which cells are built only
+      // on demand — and would build them.
+      await nextTick()
+
       while (true) {
         // A touched cell is served before anything else, moving window or not.
         if (serveUrgent()) {
@@ -391,7 +406,7 @@ export const AtticFarm = defineComponent({
         // Dropping content is as expensive as building it, so stale entries
         // are released in slices too, and never while the window is moving.
         if (!moving()) {
-          const stale = [...grown].filter((key) => !wanted.value.has(key))
+          const stale = [...grown].filter((key) => !needed(key))
           stale.slice(0, props.chunk).forEach((key) => grown.delete(key))
 
           if (stale.length) {

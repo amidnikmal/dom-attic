@@ -321,7 +321,7 @@ describe('AtticSlot handover safety', () => {
 })
 
 describe('AtticSlot on demand', () => {
-  function mountLazy() {
+  function mountLazy(listed = true) {
     const visible = ref(['a', 'b'])
     const host = document.createElement('div')
     document.body.append(host)
@@ -336,7 +336,9 @@ describe('AtticSlot on demand', () => {
           ...visible.value.map((key) => h(AtticSlot, { key, cellKey: key, onDemand: true }, {
             fallback: () => h('button', { class: 'stand' }, `стенд ${key}`),
           })),
-          h(AtticFarm, { keys: visible.value, chunk: 2 }, {
+          // A host that knows a cell is built on demand has no reason to list
+          // it for warm-up at all — the farm still has to serve it on a press.
+          h(AtticFarm, { keys: listed ? visible.value : [], chunk: 2 }, {
             default: ({ cellKey }: { cellKey: string }) => {
               built.push(cellKey)
 
@@ -351,7 +353,7 @@ describe('AtticSlot on demand', () => {
     app.mount(host)
     stop = () => app.unmount()
 
-    return { built, pressed }
+    return { built, pressed, visible }
   }
 
   it('leaves the cell unbuilt until it is touched', async () => {
@@ -373,6 +375,35 @@ describe('AtticSlot on demand', () => {
 
     expect(built).toEqual(['a'])
     expect(pressed).toEqual(['a'])
+  })
+
+  it('serves a touched cell the warm-up list never mentioned', async () => {
+    const { built, pressed } = mountLazy(false)
+    await tick()
+
+    const stand = document.querySelector('.stand') as HTMLElement
+    stand.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+    await new Promise((resolve) => setTimeout(resolve, 120))
+
+    expect(built).toEqual(['a'])
+    expect(pressed).toEqual(['a'])
+  })
+
+  it('drops an unlisted cell once nothing shows it any more', async () => {
+    const { visible } = mountLazy(false)
+    await tick()
+
+    const stand = document.querySelector('.stand') as HTMLElement
+    stand.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+    await new Promise((resolve) => setTimeout(resolve, 120))
+    expect(document.querySelectorAll('.grown')).toHaveLength(1)
+
+    // the placeholder is gone and no warm-up asks for the key, so the content
+    // has nothing to hold it in place
+    visible.value = ['b']
+    await new Promise((resolve) => setTimeout(resolve, 200))
+
+    expect(document.querySelectorAll('.grown')).toHaveLength(0)
   })
 
   it('keeps the cell like any other once it has been asked for', async () => {
