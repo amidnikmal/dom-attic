@@ -160,6 +160,13 @@ export class Farm {
   forgetSnapshot(key: FarmKey): void {
     this.snapshots.get(key)?.remove()
     this.snapshots.delete(key)
+    // The cell may have become copyable since: a list that was open when it
+    // was last looked at is closed now.
+    this.uncopyable.delete(key)
+
+    // Waking the farm matters: it may have finished its work long ago, and
+    // without a nudge the copy would never be taken again.
+    this.notify()
   }
 
   clear(): void {

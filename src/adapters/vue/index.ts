@@ -172,11 +172,9 @@ function injectFarm(): FarmContext {
 /**
  * Renders content for every key it is given, out of sight.
  *
- * The list is rendered in sorted order rather than the order it arrives in.
- * A keyed patch moves nodes around when the order changes, and a node that a
- * placeholder currently shows would be dragged back here mid-patch, blanking
- * the cell or throwing. Sorting makes the order depend on the keys alone, so
- * reordering the data leaves the rendered list untouched.
+ * Entries are rendered in the order they were mounted, and each is teleported
+ * to its own host, so the order of `keys` never moves a node a placeholder is
+ * currently showing.
  */
 export const AtticFarm = defineComponent({
   name: 'AtticFarm',
@@ -320,7 +318,13 @@ export const AtticFarm = defineComponent({
 
     /** Serves a touched cell at once, ahead of the paced queue. */
     function serveUrgent(): boolean {
-      const keys = [...urgent].filter((key) => wanted.value.has(key))
+      // A key that left the window will never be served, so it is dropped
+      // rather than kept forever.
+      urgent.forEach((key) => {
+        if (!wanted.value.has(key)) urgent.delete(key)
+      })
+
+      const keys = [...urgent]
       if (!keys.length) return false
 
       keys.forEach((key) => {
@@ -475,10 +479,20 @@ export const AtticSlot = defineComponent({
   name: 'AtticSlot',
   props: {
     cellKey: { type: String, required: true },
+    /**
+     * Any value that changes together with the cell's data. A frozen copy
+     * taken before the change would show what the cell used to be, so it is
+     * dropped and taken anew.
+     */
+    revision: { type: [String, Number], default: 0 },
   },
   setup(props, { slots }) {
     const { farm, targets, applied, urgent, urgentRevision } = injectFarm()
     const hostRef = ref<HTMLElement>()
+
+    // After the patch, not before: a copy taken while the DOM still shows the
+    // previous value would be stale the moment it is made.
+    watch(() => props.revision, () => farm.forgetSnapshot(props.cellKey), { flush: 'post' })
 
     /** Claiming a key makes the farm teleport its content here. */
     const claim = () => {
@@ -520,6 +534,8 @@ export const AtticSlot = defineComponent({
      * the matching element of the real content — otherwise the first click on
      * a cell is always lost.
      */
+    let awaitingPress: (() => void) | undefined
+
     function onPress(event: PointerEvent | FocusEvent): void {
       const host = hostRef.value
       if (!host || !pending.value) return
@@ -528,13 +544,22 @@ export const AtticSlot = defineComponent({
         ':scope > [data-attic-snapshot], :scope > .attic-fallback',
       )
       const path = stand ? pathTo(stand, event.target as Element) : null
+      const pressed = props.cellKey
 
-      urgent.add(props.cellKey)
+      urgent.add(pressed)
       urgentRevision.value++
 
+      awaitingPress?.()
       const stop = watch(pending, (waiting) => {
         if (waiting) return
+
         stop()
+        awaitingPress = undefined
+
+        // The slot may have been handed to another row while the content was
+        // on its way. Repeating the press then would act on someone else's
+        // data, so it is dropped instead.
+        if (props.cellKey !== pressed) return
 
         const live = [...host.children].find(
           (child) => !child.classList.contains('attic-fallback')
@@ -546,6 +571,8 @@ export const AtticSlot = defineComponent({
         const twin = path ? nodeByPath(live, path) : null
         replayOn(twin ?? live, event.type)
       }, { flush: 'post' })
+
+      awaitingPress = stop
     }
 
     const disclaim = (key: string) => {
@@ -556,12 +583,16 @@ export const AtticSlot = defineComponent({
     onMounted(claim)
 
     watch(() => props.cellKey, (next, previous) => {
+      awaitingPress?.()
+      awaitingPress = undefined
+
       disclaim(previous)
       void next
       claim()
     })
 
     onBeforeUnmount(() => {
+      awaitingPress?.()
       hostRef.value?.querySelector(':scope > [data-attic-snapshot]')?.remove()
       disclaim(props.cellKey)
     })

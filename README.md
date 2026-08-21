@@ -117,6 +117,10 @@ useFarm()
 </template>
 ```
 
+Pass `revision` to `AtticSlot` — any value that changes with the cell's data — so a copy
+taken before a change is dropped and replaced. Without it a cell that was edited and then
+scrolled away would come back showing what it used to be.
+
 A press on a cell that is still showing a copy or a placeholder is not lost: the cell jumps
 the queue, and the press is repeated on the matching element of the real content once it
 arrives.

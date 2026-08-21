@@ -234,3 +234,88 @@ describe('AtticSlot press', () => {
     expect(clicks).toBe(1)
   })
 })
+
+describe('AtticSlot handover safety', () => {
+  it('drops a press when the slot has moved on to another cell', async () => {
+    const keys = ref(['a', 'b'])
+    const visible = ref([{ id: 0, key: 'a' }])
+    const host = document.createElement('div')
+    document.body.append(host)
+    const pressed: string[] = []
+
+    const App = defineComponent({
+      setup() {
+        useFarm()
+
+        return () => [
+          ...visible.value.map((row) => h(AtticSlot, { key: row.id, cellKey: row.key }, {
+            fallback: () => h('button', { class: 'stand' }, row.key),
+          })),
+          h(AtticFarm, { keys: keys.value, chunk: 1, settleDelay: 4_000 }, {
+            default: ({ cellKey }: { cellKey: string }) =>
+              h('button', { class: 'grown', onClick: () => pressed.push(cellKey) }, cellKey),
+          }),
+        ]
+      },
+    })
+
+    const app = createApp(App)
+    app.mount(host)
+    stop = () => app.unmount()
+
+    await new Promise((resolve) => setTimeout(resolve, 40))
+
+    // Press the cell showing 'a'...
+    const stand = document.querySelector('.stand') as HTMLElement
+    stand.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+
+    // ...but the very same slot is handed to another row before the content
+    // arrives, so the press must not land on 'b'.
+    visible.value = [{ id: 0, key: 'b' }]
+    await new Promise((resolve) => setTimeout(resolve, 120))
+
+    expect(pressed).toEqual([])
+  })
+
+  it('retakes a copy when the cell data changes', async () => {
+    const revision = ref(0)
+    const label = ref('старое')
+    const host = document.createElement('div')
+    document.body.append(host)
+
+    const App = defineComponent({
+      setup() {
+        const farm = useFarm()
+        ;(window as unknown as { __farm?: unknown }).__farm = farm
+
+        return () => [
+          h(AtticSlot, { cellKey: 'a', revision: revision.value }),
+          h(AtticFarm, { keys: ['a'], chunk: 1 }, {
+            default: () => h('b', { class: 'grown' }, label.value),
+          }),
+        ]
+      },
+    })
+
+    const app = createApp(App)
+    app.mount(host)
+    stop = () => app.unmount()
+
+    await tick()
+    await tick()
+
+    const farm = (window as unknown as {
+      __farm: { snapshotFor: (k: string) => HTMLElement | undefined }
+    }).__farm
+    expect(farm.snapshotFor('a')?.textContent).toBe('старое')
+
+    // The data changed, so the copy taken before it is worthless and a fresh
+    // one has to replace it.
+    label.value = 'новое'
+    revision.value++
+    await tick()
+    await tick()
+
+    expect(farm.snapshotFor('a')?.textContent).toBe('новое')
+  })
+})
