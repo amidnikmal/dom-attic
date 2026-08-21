@@ -57,7 +57,7 @@ describe('lightweight copies', () => {
   it('keeps what is on screen and skips what is not', () => {
     const live = document.createElement('div')
     const visible = document.createElement('b')
-    visible.textContent = 'видно'
+    visible.textContent = 'on screen'
     const hidden = document.createElement('i')
     hidden.style.display = 'none'
     for (let i = 0; i < 200; i++) hidden.append(document.createElement('span'))
@@ -69,7 +69,7 @@ describe('lightweight copies', () => {
     const copy = createSnapshot(live, 10)!
 
     expect(copy).not.toBeNull()
-    expect(copy.textContent).toBe('видно')
+    expect(copy.textContent).toBe('on screen')
     expect(copy.querySelector('i')).toBeNull()
   })
 
@@ -78,7 +78,7 @@ describe('lightweight copies', () => {
     for (let i = 0; i < 500; i++) {
       const option = document.createElement('option')
       option.value = String(i)
-      option.textContent = `вариант ${i}`
+      option.textContent = `entry ${i}`
       live.append(option)
     }
     live.value = '7'
@@ -90,6 +90,6 @@ describe('lightweight copies', () => {
 
     expect(copy).not.toBeNull()
     expect(copy.querySelectorAll('option')).toHaveLength(1)
-    expect(copy.textContent).toBe('вариант 7')
+    expect(copy.textContent).toBe('entry 7')
   })
 })
