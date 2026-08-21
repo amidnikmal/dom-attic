@@ -194,6 +194,22 @@ how long the previous one took, and content leaving the window is released the s
 | `visibleSlice` | minimum slice for cells on screen (6) |
 | `settleDelay` | quiet time before growth resumes, ms (150) |
 
+## Cells built on demand
+
+Some content cannot be mounted within a frame at all — a control holding ten thousand
+entries takes a few hundred milliseconds no matter how the work is paced. Such a cell is
+better left unbuilt while the list scrolls:
+
+```vue
+<AtticSlot :cell-key="key" on-demand>
+  <template #fallback>{{ row.status }}</template>
+</AtticSlot>
+```
+
+The farm never warms these up; a press builds the cell and lands on it, and from then on it
+is kept like any other, copies and all. A `fallback` is required here — until the first press
+there is nothing else to show.
+
 ## Looking inside
 
 The farm answers two questions without any guesswork on the caller's side:

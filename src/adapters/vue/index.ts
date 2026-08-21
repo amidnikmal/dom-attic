@@ -138,6 +138,13 @@ interface FarmContext {
   urgent: Set<string>
   /** Bumped whenever the urgent set changes, so the farm can react to it. */
   urgentRevision: Ref<number>
+  /**
+   * Cells that are not built until someone touches them. Content that cannot
+   * be mounted within a frame — a control holding thousands of entries — is
+   * better left unbuilt while the list scrolls: the placeholder stands in for
+   * it, and the cost moves to the first press instead of every pass.
+   */
+  lazy: Set<string>
 }
 
 const FARM_KEY: InjectionKey<FarmContext> = Symbol('attic-farm')
@@ -155,8 +162,9 @@ export function useFarm(): Farm {
   const applied = shallowRef(new Map<string, HTMLElement>())
   const urgent = new Set<string>()
   const urgentRevision = ref(0)
+  const lazy = new Set<string>()
 
-  provide(FARM_KEY, { farm, targets, applied, urgent, urgentRevision })
+  provide(FARM_KEY, { farm, targets, applied, urgent, urgentRevision, lazy })
   onBeforeUnmount(() => farm.clear())
 
   return farm
@@ -194,7 +202,7 @@ export const AtticFarm = defineComponent({
     maxSnapshotNodes: { type: Number, default: DEFAULT_MAX_SNAPSHOT_NODES },
   },
   setup(props, { slots }) {
-    const { farm, targets, applied, urgent, urgentRevision } = injectFarm()
+    const { farm, targets, applied, urgent, urgentRevision, lazy } = injectFarm()
 
     /**
      * Keys whose content is actually mounted. Kept as a set rather than a
@@ -235,12 +243,16 @@ export const AtticFarm = defineComponent({
       return result
     }
 
-    /** Keys whose content is not where the placeholders now want it. */
+    /**
+     * Keys whose content is not where the placeholders now want it. Only what
+     * is actually mounted counts: aiming a teleport at a cell that does not
+     * exist yet would tell its placeholder the wait is over.
+     */
     function misplaced(): string[] {
       const result: string[] = []
 
       targets.forEach((host, key) => {
-        if (applied.value.get(key) !== host) result.push(key)
+        if (grown.has(key) && applied.value.get(key) !== host) result.push(key)
       })
 
       return result
@@ -350,9 +362,11 @@ export const AtticFarm = defineComponent({
       // scrolling settles.
       if (moving()) return []
 
-      const shown = [...targets.keys()].filter((key) => wanted.value.has(key) && !grown.has(key))
+      const shown = [...targets.keys()].filter(
+        (key) => wanted.value.has(key) && !grown.has(key) && !lazy.has(key),
+      )
 
-      return [...shown, ...props.keys.filter((key) => !grown.has(key))]
+      return [...shown, ...props.keys.filter((key) => !grown.has(key) && !lazy.has(key))]
     }
 
     async function grow() {
@@ -400,9 +414,11 @@ export const AtticFarm = defineComponent({
 
         const queue = pending()
         if (!queue.length) {
-          if (props.keys.every((key) => grown.has(key))
-            && grown.size === wanted.value.size
-            && !pendingMoves()) break
+          // Cells built on demand are never owed, so waiting for them would
+          // keep the loop running forever.
+          const owed = props.keys.filter((key) => !lazy.has(key))
+
+          if (owed.every((key) => grown.has(key)) && !pendingMoves()) break
 
           // Nothing to do right now, but warm-up is still owed: wait it out.
           await yieldToBrowser()
@@ -487,9 +503,15 @@ export const AtticSlot = defineComponent({
      * dropped and taken anew.
      */
     revision: { type: [String, Number], default: 0 },
+    /**
+     * Do not build this cell until someone touches it. Worth it when the
+     * content cannot be mounted within a frame; such a cell must be given a
+     * `fallback`, because until the first press there is nothing else to show.
+     */
+    onDemand: { type: Boolean, default: false },
   },
   setup(props, { slots }) {
-    const { farm, targets, applied, urgent, urgentRevision } = injectFarm()
+    const { farm, targets, applied, urgent, urgentRevision, lazy } = injectFarm()
     const hostRef = ref<HTMLElement>()
 
     // After the patch, not before: a copy taken while the DOM still shows the
@@ -500,6 +522,7 @@ export const AtticSlot = defineComponent({
     const claim = () => {
       if (!hostRef.value) return
 
+      if (props.onDemand) lazy.add(props.cellKey)
       targets.set(props.cellKey, hostRef.value)
       farm.claim(props.cellKey, hostRef.value)
     }
@@ -548,6 +571,9 @@ export const AtticSlot = defineComponent({
       const path = stand ? pathTo(stand, event.target as Element) : null
       const pressed = props.cellKey
 
+      // Once asked for, the cell stops being lazy: from here on it is kept
+      // like any other, copies and all.
+      lazy.delete(pressed)
       urgent.add(pressed)
       urgentRevision.value++
 
@@ -578,6 +604,7 @@ export const AtticSlot = defineComponent({
     }
 
     const disclaim = (key: string) => {
+      lazy.delete(key)
       targets.delete(key)
       farm.disclaim(key)
     }

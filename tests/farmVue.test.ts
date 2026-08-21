@@ -319,3 +319,75 @@ describe('AtticSlot handover safety', () => {
     expect(farm.snapshotFor('a')?.textContent).toBe('after')
   })
 })
+
+describe('AtticSlot on demand', () => {
+  function mountLazy() {
+    const visible = ref(['a', 'b'])
+    const host = document.createElement('div')
+    document.body.append(host)
+    const built: string[] = []
+    const pressed: string[] = []
+
+    const App = defineComponent({
+      setup() {
+        useFarm()
+
+        return () => [
+          ...visible.value.map((key) => h(AtticSlot, { key, cellKey: key, onDemand: true }, {
+            fallback: () => h('button', { class: 'stand' }, `стенд ${key}`),
+          })),
+          h(AtticFarm, { keys: visible.value, chunk: 2 }, {
+            default: ({ cellKey }: { cellKey: string }) => {
+              built.push(cellKey)
+
+              return h('button', { class: 'grown', onClick: () => pressed.push(cellKey) }, cellKey)
+            },
+          }),
+        ]
+      },
+    })
+
+    const app = createApp(App)
+    app.mount(host)
+    stop = () => app.unmount()
+
+    return { built, pressed }
+  }
+
+  it('leaves the cell unbuilt until it is touched', async () => {
+    const { built } = mountLazy()
+    await tick()
+    await tick()
+
+    expect(built).toEqual([])
+    expect(document.querySelectorAll('.stand')).toHaveLength(2)
+  })
+
+  it('builds the cell on a press and lands the press on it', async () => {
+    const { built, pressed } = mountLazy()
+    await tick()
+
+    const stand = document.querySelector('.stand') as HTMLElement
+    stand.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+    await new Promise((resolve) => setTimeout(resolve, 120))
+
+    expect(built).toEqual(['a'])
+    expect(pressed).toEqual(['a'])
+  })
+
+  it('keeps the cell like any other once it has been asked for', async () => {
+    const { built } = mountLazy()
+    await tick()
+
+    const stand = document.querySelector('.stand') as HTMLElement
+    stand.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+    await tick()
+    await tick()
+
+    // the farm photographs it, so a return trip has something to show at once
+    const farm = (document.querySelector('[data-attic-home]') as HTMLElement)
+    expect(farm).not.toBeNull()
+    expect(built).toEqual(['a'])
+    expect(document.querySelectorAll('.grown')).toHaveLength(1)
+  })
+})
