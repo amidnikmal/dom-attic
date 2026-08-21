@@ -211,7 +211,7 @@ export const AtticFarm = defineComponent({
     let lastChange = 0
     let growing = false
     let slice = 1
-    /** Во что обошлась одна ячейка в прошлый раз, мс. */
+    /** What a single cell cost last time, in milliseconds. */
     let perCell = 0
 
     /**
