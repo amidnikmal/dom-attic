@@ -141,11 +141,17 @@ magnitude cheaper than building it, so the cell is never blank on return. The co
 `data-attic-snapshot`; for a cell shown for the first time there is nothing to copy yet, and
 the `fallback` slot covers that case.
 
+A copy is taken as soon as a cell settles, not once everything else is done: copies matter
+most while there is still something left to mount.
+
 A copy keeps what is on screen and walks past what is not, which is where the weight of a
 heavy component usually sits: a list of thousands of entries showing one of them, a
 virtualized panel holding a window of rows. Nodes that draw nothing yet decide what their
 parent shows — a chosen entry, a ticked box, an opened section — are kept regardless. A
 closed list of 2000 entries therefore copies as three nodes, pixel for pixel.
+
+A parent with a crowd of children is judged by the cheap signs alone — asking ten thousand
+entries for their geometry costs more than the copy saves.
 
 `maxSnapshotNodes` (400 by default) caps the copy itself, not the original. Hitting the cap
 means the copy would be a torn version of the cell, so none is made and `fallback` covers it.
@@ -176,8 +182,10 @@ treating that as movement would postpone mounting indefinitely.
 
 Growth is paced rather than immediate. Nothing is mounted while the window is still moving —
 heavy content costs more than a frame, so building it mid-scroll stutters, and the `fallback`
-slot covers the wait. Once scrolling settles, cells on screen are filled first, several per
-slice (`visibleSlice`), and the surroundings follow one slice at a time. Slice size adapts to
+slot covers the wait. Once scrolling settles, cells on screen are filled first, several per slice
+(`visibleSlice`) — but only while a cell is cheap enough to afford it: a handful of expensive
+ones in a single patch is the very freeze this pacing exists to avoid. The surroundings
+follow one slice at a time. Slice size adapts to
 how long the previous one took, and content leaving the window is released the same way.
 
 | Prop | |

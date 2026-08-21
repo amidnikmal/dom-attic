@@ -7,6 +7,13 @@ export const SNAPSHOT_ATTR = 'data-attic-snapshot'
  */
 export const DEFAULT_MAX_SNAPSHOT_NODES = 400
 
+/**
+ * Asking an element for its boxes is cheap once and ruinous ten thousand times
+ * over, so a parent with a crowd of children is judged by the cheap signs
+ * alone: whatever is marked as chosen stays, the rest is skipped unseen.
+ */
+export const DEFAULT_MAX_MEASURED_CHILDREN = 200
+
 /** An element that produces no boxes is not on screen and need not be copied. */
 function isRendered(element: Element): boolean {
   return element.getClientRects().length > 0
@@ -58,6 +65,8 @@ function copyVisible(node: Element, budget: { left: number }, all: boolean): Ele
   const copy = node.cloneNode(false) as Element
   copyState(node, copy)
 
+  const crowded = node.childElementCount > DEFAULT_MAX_MEASURED_CHILDREN
+
   for (const child of node.childNodes) {
     if (child.nodeType === Node.TEXT_NODE) {
       copy.append(child.cloneNode(false))
@@ -65,7 +74,10 @@ function copyVisible(node: Element, budget: { left: number }, all: boolean): Ele
     }
 
     if (!(child instanceof Element)) continue
-    if (!all && !isRendered(child) && !isActive(child)) continue
+
+    if (crowded) {
+      if (!isActive(child)) continue
+    } else if (!all && !isRendered(child) && !isActive(child)) continue
 
     const branch = copyVisible(child, budget, all)
     if (!branch) return copy

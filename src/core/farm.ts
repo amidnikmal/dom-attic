@@ -25,7 +25,7 @@ export class Farm {
    */
   private readonly snapshots = new Map<FarmKey, HTMLElement>()
 
-  readonly stats = { grown: 0, adopted: 0, released: 0 }
+  readonly stats = { grown: 0, adopted: 0, released: 0, captured: 0, tooLarge: 0 }
 
   constructor() {
     this.home.style.display = 'none'
@@ -131,9 +131,14 @@ export class Farm {
    */
   capture(key: FarmKey, node: HTMLElement, maxNodes?: number): boolean {
     const copy = createSnapshot(node, maxNodes)
-    if (!copy) return false
+    if (!copy) {
+      this.stats.tooLarge++
+
+      return false
+    }
 
     this.snapshots.set(key, copy)
+    this.stats.captured++
 
     return true
   }

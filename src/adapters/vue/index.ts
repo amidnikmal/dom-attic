@@ -211,6 +211,8 @@ export const AtticFarm = defineComponent({
     let lastChange = 0
     let growing = false
     let slice = 1
+    /** Во что обошлась одна ячейка в прошлый раз, мс. */
+    let perCell = 0
 
     /**
      * Where each teleport currently points. Kept apart from the live claims:
@@ -268,23 +270,30 @@ export const AtticFarm = defineComponent({
      * main thread.
      */
     function captureSome(count: number): boolean {
-      const queue = unphotographed()
-      if (!queue.length) return false
+      let taken = 0
 
-      queue.slice(0, count).forEach((key) => {
+      for (const key of unphotographed()) {
+        if (taken === count) break
+
         const host = targets.get(key)
         const content = host && [...host.children].find(
-          (child) => !child.classList.contains('attic-fallback') && !child.hasAttribute('data-attic-snapshot'),
+          (child) => !child.classList.contains('attic-fallback')
+            && !child.hasAttribute('data-attic-snapshot'),
         )
+
+        // Nothing to photograph yet: the cell is claimed but its content has
+        // not been mounted. Reporting work here would spin the loop forever
+        // and starve the mounting it is waiting for.
+        if (!(content instanceof HTMLElement)) continue
 
         // A cell too large to copy is remembered as such, so the farm does not
         // keep trying and paying for it on every pass.
-        if (content instanceof HTMLElement && !farm.capture(key, content, props.maxSnapshotNodes)) {
-          farm.markUncopyable(key)
-        }
-      })
+        if (!farm.capture(key, content, props.maxSnapshotNodes)) farm.markUncopyable(key)
 
-      return true
+        taken++
+      }
+
+      return taken > 0
     }
 
     /** Moves a few teleports at a time, vacating hosts before filling them. */
@@ -390,18 +399,19 @@ export const AtticFarm = defineComponent({
           }
         }
 
+        // A cell that is already in place gets photographed before the queue
+        // moves on. Leaving it to the end would mean no copies at all while
+        // there is anything left to mount — which is exactly when they are
+        // needed. One at a time: cloning is cheaper than building, but still
+        // more than a frame can afford.
+        if (!moving() && captureSome(1)) {
+          await nextTick()
+          await yieldToBrowser()
+          continue
+        }
+
         const queue = pending()
         if (!queue.length) {
-          // Photographing is the least urgent job, so it runs once nothing is
-          // waiting to be mounted or moved.
-          // One at a time: cloning a heavy cell is cheaper than building it,
-          // but still more than a frame can afford.
-          if (!moving() && captureSome(1)) {
-            await nextTick()
-            await yieldToBrowser()
-            continue
-          }
-
           if (props.keys.every((key) => grown.has(key))
             && grown.size === wanted.value.size
             && !pendingMoves()) break
@@ -415,13 +425,17 @@ export const AtticFarm = defineComponent({
 
         // Cells on screen are filled several at a time: waiting a second for
         // them to appear one by one looks like a page that is still loading.
+        // Cheap cells only, though — a handful of expensive ones in a single
+        // patch is exactly the freeze this pacing exists to avoid.
         const onScreen = queue.some((key) => targets.has(key))
-        const take = onScreen ? Math.max(slice, props.visibleSlice) : slice
+        const affordable = perCell < 50
+        const take = onScreen && affordable ? Math.max(slice, props.visibleSlice) : slice
         queue.slice(0, take).forEach((key) => grown.add(key))
 
         // Wait for the patch so the measurement covers the real mounting cost.
         await nextTick()
         const took = performance.now() - startedAt
+        perCell = took / Math.max(take, 1)
 
         // Half a frame is the target. Growth is gradual and shrinking is not:
         // doubling would keep overshooting on heavy cells and stutter.
