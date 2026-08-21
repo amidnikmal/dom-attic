@@ -279,7 +279,7 @@ describe('AtticSlot handover safety', () => {
 
   it('retakes a copy when the cell data changes', async () => {
     const revision = ref(0)
-    const label = ref('старое')
+    const label = ref('before')
     const host = document.createElement('div')
     document.body.append(host)
 
@@ -307,15 +307,15 @@ describe('AtticSlot handover safety', () => {
     const farm = (window as unknown as {
       __farm: { snapshotFor: (k: string) => HTMLElement | undefined }
     }).__farm
-    expect(farm.snapshotFor('a')?.textContent).toBe('старое')
+    expect(farm.snapshotFor('a')?.textContent).toBe('before')
 
     // The data changed, so the copy taken before it is worthless and a fresh
     // one has to replace it.
-    label.value = 'новое'
+    label.value = 'after'
     revision.value++
     await tick()
     await tick()
 
-    expect(farm.snapshotFor('a')?.textContent).toBe('новое')
+    expect(farm.snapshotFor('a')?.textContent).toBe('after')
   })
 })
